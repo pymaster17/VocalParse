@@ -29,6 +29,33 @@
 
 VocalParse 扩展了 Qwen3-ASR 的词表，新增约 1,400 个 AST token，包括音高（`<P_0>` 到 `<P_127>`）、音符时值（`<NOTE_*>`）、速度（`<BPM_*>`）和物理时长（`<dur_*>`）。完整列表参见 [docs/note_tokens.md](docs/note_tokens.md)。
 
+## 预训练模型
+
+基于 Qwen3-ASR-1.7B、CoT 训练的微调 checkpoint 已发布到 HuggingFace：
+
+| 模型 | HuggingFace |
+|---|---|
+| VocalParse-1.7B (CoT) | [pymaster/VocalParse](https://huggingface.co/pymaster/VocalParse) |
+
+通过 `huggingface_hub` 下载：
+
+```python
+from huggingface_hub import snapshot_download
+snapshot_download("pymaster/VocalParse", local_dir="./vocalparse-weights")
+```
+
+或使用 CLI：
+
+```bash
+huggingface-cli download pymaster/VocalParse --local-dir ./vocalparse-weights
+```
+
+下载后在推理配置中指向该目录：
+
+```yaml
+checkpoint: ./vocalparse-weights
+```
+
 ## 安装
 
 先根据你的 CPU/CUDA 环境安装 PyTorch，再安装 VocalParse：
@@ -47,7 +74,7 @@ pip install -e ".[flash]"
 说明：
 - `qwen-asr` 会作为依赖自动安装。
 - 如果环境里无法安装 `flash-attn`，推理配置里改用 `sdpa` 即可。
-- 仓库本身不包含模型权重，仍需可访问 `Qwen/Qwen3-ASR-*` 基座模型。
+- 预训练模型基于 `Qwen/Qwen3-ASR-1.7B` 微调，无需单独下载基座权重。
 
 ## 快速开始
 

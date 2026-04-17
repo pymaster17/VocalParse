@@ -29,6 +29,33 @@ Singing Audio (16kHz) -> Whisper Encoder -> Qwen LLM Decoder -> AST Token Sequen
 
 VocalParse extends the Qwen3-ASR vocabulary with about 1,400 AST tokens for pitch (`<P_0>` to `<P_127>`), note value (`<NOTE_*>`), tempo (`<BPM_*>`), and physical duration (`<dur_*>`). See [docs/note_tokens.md](docs/note_tokens.md).
 
+## Pretrained Model
+
+A fine-tuned checkpoint (Qwen3-ASR-1.7B, CoT training) is available on HuggingFace:
+
+| Model | HuggingFace |
+|---|---|
+| VocalParse-1.7B (CoT) | [pymaster/VocalParse](https://huggingface.co/pymaster/VocalParse) |
+
+Download with `huggingface_hub`:
+
+```python
+from huggingface_hub import snapshot_download
+snapshot_download("pymaster/VocalParse", local_dir="./vocalparse-weights")
+```
+
+Or with the CLI:
+
+```bash
+huggingface-cli download pymaster/VocalParse --local-dir ./vocalparse-weights
+```
+
+Point the inference config to the downloaded directory:
+
+```yaml
+checkpoint: ./vocalparse-weights
+```
+
 ## Installation
 
 Install PyTorch first for your CPU/CUDA environment, then install VocalParse:
@@ -47,7 +74,7 @@ pip install -e ".[flash]"
 Notes:
 - `qwen-asr` is installed automatically as a package dependency.
 - If `flash-attn` is unavailable in your environment, use `sdpa` in inference config instead.
-- The repository does not vendor model weights. You still need access to the base `Qwen/Qwen3-ASR-*` checkpoint.
+- The repository does not vendor model weights. The pretrained checkpoint above is based on `Qwen/Qwen3-ASR-1.7B`.
 
 ## Quick Start
 
