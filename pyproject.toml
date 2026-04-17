@@ -40,8 +40,8 @@ dependencies = [
 flash = ["flash-attn>=2.8.0"]
 
 [project.urls]
-Homepage = "https://github.com/VocalParse/VocalParse"
-Repository = "https://github.com/VocalParse/VocalParse"
+Homepage = "https://github.com/pymaster17/VocalParse"
+Repository = "https://github.com/pymaster17/VocalParse"
 
 [tool.setuptools]
 packages = { find = { where = ["."], include = ["vocalparse*"] } }

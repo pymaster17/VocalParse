@@ -58,23 +58,30 @@ checkpoint: ./vocalparse-weights
 
 ## Installation
 
-Install PyTorch first for your CPU/CUDA environment, then install VocalParse:
+[uv](https://docs.astral.sh/uv/) is recommended for fast, reproducible environment setup.
 
 ```bash
-pip install torch torchaudio
-pip install -e .
+# Create and activate a virtual environment
+uv venv --python 3.10
+source .venv/bin/activate
+
+# Install PyTorch (adjust the index URL for your CUDA version)
+uv pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124
+
+# Install VocalParse and all dependencies
+uv pip install -e .
 ```
 
 Optional Flash Attention:
 
 ```bash
-pip install -e ".[flash]"
+uv pip install -e ".[flash]"
 ```
 
 Notes:
-- `qwen-asr` is installed automatically as a package dependency.
-- If `flash-attn` is unavailable in your environment, use `sdpa` in inference config instead.
-- The repository does not vendor model weights. The pretrained checkpoint above is based on `Qwen/Qwen3-ASR-1.7B`.
+- `qwen-asr` and all other dependencies are installed automatically.
+- If `flash-attn` is unavailable in your environment, use `sdpa` in the inference config instead.
+- The pretrained checkpoint above is based on `Qwen/Qwen3-ASR-1.7B`.
 
 ## Quick Start
 

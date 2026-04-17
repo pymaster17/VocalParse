@@ -58,21 +58,28 @@ checkpoint: ./vocalparse-weights
 
 ## 安装
 
-先根据你的 CPU/CUDA 环境安装 PyTorch，再安装 VocalParse：
+推荐使用 [uv](https://docs.astral.sh/uv/) 进行快速、可复现的环境配置。
 
 ```bash
-pip install torch torchaudio
-pip install -e .
+# 创建并激活虚拟环境
+uv venv --python 3.10
+source .venv/bin/activate
+
+# 安装 PyTorch（根据你的 CUDA 版本调整 index URL）
+uv pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124
+
+# 安装 VocalParse 及所有依赖
+uv pip install -e .
 ```
 
 可选安装 Flash Attention：
 
 ```bash
-pip install -e ".[flash]"
+uv pip install -e ".[flash]"
 ```
 
 说明：
-- `qwen-asr` 会作为依赖自动安装。
+- `qwen-asr` 及其他所有依赖会自动安装。
 - 如果环境里无法安装 `flash-attn`，推理配置里改用 `sdpa` 即可。
 - 预训练模型基于 `Qwen/Qwen3-ASR-1.7B` 微调，无需单独下载基座权重。
 
