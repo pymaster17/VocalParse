@@ -48,7 +48,6 @@ length_matched_lyric_eval: false
 
 # ── Prompt Format ───────────────────────────────────────────────
 bpm_position: "last"
-include_dur: false
 
 # ── Generation ──────────────────────────────────────────────────
 max_new_tokens: 512

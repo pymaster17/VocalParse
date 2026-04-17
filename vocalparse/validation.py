@@ -155,7 +155,6 @@ class GenerateSamplesCallback(TrainerCallback):
                  data_format: str = "hf_dataset",
                  prefix_text: str = "", eos: str = "",
                  bpm_position: str = "last",
-                 include_dur: bool = False,
                  asr_cot: bool = False):
         self.val_ds = val_ds
         self.tokenizer = tokenizer
@@ -168,7 +167,6 @@ class GenerateSamplesCallback(TrainerCallback):
         self.prefix_text = prefix_text
         self.eos = eos
         self.bpm_position = bpm_position
-        self.include_dur = include_dur
         self.asr_cot = asr_cot
         self._trainer = None
 
@@ -326,7 +324,7 @@ class GenerateSamplesCallback(TrainerCallback):
 
                 # Compute per-sample AST metrics
                 sample_metrics = compute_metrics(
-                    gt_text, pred_text, include_dur=self.include_dur,
+                    gt_text, pred_text,
                 )
                 if sample_metrics is not None:
                     all_metrics.append(sample_metrics)
@@ -342,7 +340,7 @@ class GenerateSamplesCallback(TrainerCallback):
         # Aggregate and log metrics
         if all_metrics:
             import math
-            agg = aggregate_metrics(all_metrics, include_dur=self.include_dur)
+            agg = aggregate_metrics(all_metrics)
 
             metric_keys = [
                 ("cer", "eval/cer"),
@@ -352,8 +350,6 @@ class GenerateSamplesCallback(TrainerCallback):
                 ("abs_note_dur_mae", "eval/abs_note_dur_mae"),
                 ("bpm_mae", "eval/bpm_mae"),
             ]
-            if self.include_dur:
-                metric_keys.append(("dur_mae", "eval/dur_mae"))
 
             parts = []
             for key, tb_key in metric_keys:
@@ -423,7 +419,6 @@ class GenerateSamplesCallback(TrainerCallback):
             ast_text = build_interleaved_text(
                 syllables=syllables, bpm=bpm,
                 bpm_position=self.bpm_position,
-                include_dur=self.include_dur,
             )
             # Include CoT lyrics in GT when asr_cot is enabled, so that
             # compute_metrics sees the full sequence for comparison.

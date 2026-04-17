@@ -6,7 +6,7 @@ def get_token_maps():
     """Returns mapping for SVS/AST tokens.
 
     Returns:
-        (pitch_tokens, note_tokens, bpm_tokens, dur_units, special_tokens, dur_tokens)
+        (pitch_tokens, note_tokens, bpm_tokens, dur_units)
     """
     pitch_tokens = [f"<P_{i}>" for i in range(128)]
     base_note_tokens = ["<NOTE_1>", "<NOTE_2>", "<NOTE_4>", "<NOTE_8>", "<NOTE_16>", "<NOTE_32>"]
@@ -31,19 +31,4 @@ def get_token_maps():
 
     bpm_tokens = [f"<BPM_{i}>" for i in range(256)]
 
-    # Physical duration tokens: <dur_0.01> to <dur_10.00> (0.01s quantization)
-    dur_tokens = [f"<dur_{i/100:.2f}>" for i in range(1, 1001)]
-
-    # Special tokens for melisma handling and masking
-    special_tokens = ["<SLUR>", "<SVS_MASK>"]
-
-    return pitch_tokens, note_tokens, bpm_tokens, dur_units, special_tokens, dur_tokens
-
-
-def _quantize_dur(dur_seconds: float) -> str:
-    """Quantize a physical duration (seconds) to the nearest <dur_X.XX> token.
-
-    Clamps to [0.01, 10.00] range with 0.01s resolution.
-    """
-    centiseconds = max(1, min(1000, round(dur_seconds * 100)))
-    return f"<dur_{centiseconds / 100:.2f}>"
+    return pitch_tokens, note_tokens, bpm_tokens, dur_units

@@ -9,7 +9,6 @@
 #   - CER (singing)    : Character Error Rate including AP/SP silence tokens
 #   - Pitch MAE        : Mean Absolute Error in semitones
 #   - Note MAE         : Mean Absolute Error in log2(note_duration) space
-#   - Duration MAE     : Mean Absolute Error of physical duration (seconds)
 #   - BPM MAE          : Tempo prediction error
 #   - Pitch Error Rate : Fraction of aligned pairs with wrong pitch (inference-only)
 #   - Note Num Mean Err: Mean |n_gt_pairs - n_pred_pairs| per word (inference-only)
@@ -18,7 +17,7 @@
 #   1. Parse AST token sequences via parse_transcription_text()
 #   2. Aggregate melisma entries into word-level structures (ASTWord)
 #   3. Align GT/Pred word sequences using Needleman-Wunsch → CER
-#   4. For aligned word pairs, align their pitch/note pairs → Pitch/Note/Dur MAE
+#   4. For aligned word pairs, align their pitch/note pairs → Pitch/Note MAE
 
 import math
 import re
@@ -54,17 +53,15 @@ def parse_transcription_text(text: str) -> Optional[Dict[str, Any]]:
     Supports both BPM-first and BPM-last formats (auto-detected):
     - BPM-first: ``<BPM_89> 感 <P_68><NOTE_DOT_16> 受 <P_60><NOTE_8>``
     - BPM-last:  ``感 <P_68><NOTE_DOT_16> 受 <P_60><NOTE_8> <BPM_89>``
-    - With duration: ``好 <dur_0.25> <P_68> <NOTE_4> 受 <dur_0.50> <P_60> <NOTE_8>``
-    - Melisma (一字多音): ``感 <P_68><NOTE_8> <SLUR> <P_70><NOTE_4>``
-      word "感" → first note, "⌒" → continuation notes
+    - Melisma (一字多音): ``感 <P_68><NOTE_8> · <P_70><NOTE_4>``
+      word "感" → first note, "·" → continuation notes (pseudo-melisma)
     - Error tolerance for malformed sequences from early training:
       Missing <NOTE> after <P>: default <NOTE_4>;
       Orphan <NOTE> without <P>: skipped;
       Garbled tokens: ignored.
 
     Returns:
-        dict(bpm, words, pitches, notes, durations) or None if nothing parseable.
-        ``durations`` is a list of float or None per entry (None when no dur token).
+        dict(bpm, words, pitches, notes) or None if nothing parseable.
     """
     # Handle ASR-CoT format: "lyrics<|file_sep|>AST_sequence"
     # Strip the CoT prefix and parse only the AST sequence.
@@ -77,11 +74,9 @@ def parse_transcription_text(text: str) -> Optional[Dict[str, Any]]:
         return None
 
     bpm = 120
-    # Build list of [word, pitch, note_or_None, dur_or_None] entries
+    # Build list of [word, pitch, note_or_None] entries
     entries = []
     cur_word = None
-    last_is_slur = False
-    pending_dur = None  # <dur_X.XX> seen before <P_xx>
 
     # Known meta tokens to skip
     _SKIP = {"<asr_text>", "language", "Chinese", "English", "Japanese", "Korean"}
@@ -96,12 +91,6 @@ def parse_transcription_text(text: str) -> Optional[Dict[str, Any]]:
             if m:
                 bpm = int(m.group(1))
 
-        elif tok.startswith("<dur_"):
-            # Physical duration token: <dur_X.XX>
-            m = re.match(r'<dur_(\d+\.\d+)>', tok)
-            if m:
-                pending_dur = float(m.group(1))
-
         elif tok.startswith("<P_"):
             m = re.match(r'<P_(\d+)>', tok)
             if m:
@@ -109,20 +98,15 @@ def parse_transcription_text(text: str) -> Optional[Dict[str, Any]]:
                 # Previous entry missing note → fill default
                 if entries and entries[-1][2] is None:
                     entries[-1][2] = "<NOTE_4>"
-                word = cur_word if cur_word else ("⌒" if last_is_slur else "·")
-                entries.append([word, pitch, None, pending_dur])
+                word = cur_word if cur_word else "·"
+                entries.append([word, pitch, None])
                 cur_word = None
-                last_is_slur = False
-                pending_dur = None
 
         elif tok.startswith("<NOTE"):
             if tok in NOTE_DUR_MAP:
                 if entries and entries[-1][2] is None:
                     entries[-1][2] = tok
                 # else: orphan note → skip
-
-        elif tok == "<SLUR>":
-            last_is_slur = True
 
         elif tok in _SKIP:
             continue
@@ -145,7 +129,6 @@ def parse_transcription_text(text: str) -> Optional[Dict[str, Any]]:
         "words": [e[0] for e in entries],
         "pitches": [e[1] for e in entries],
         "notes": [e[2] for e in entries],
-        "durations": [e[3] for e in entries],
     }
 
 
@@ -155,32 +138,26 @@ def parse_transcription_text(text: str) -> Optional[Dict[str, Any]]:
 
 @dataclass
 class ASTWord:
-    """A word (character) with its associated pitch/note/duration pairs."""
+    """A word (character) with its associated pitch/note pairs."""
     char: str
-    pairs: List[Tuple[int, str, Optional[float]]] = field(default_factory=list)
-    # Each pair: (midi_pitch, note_token, duration_seconds_or_None)
+    pairs: List[Tuple[int, str]] = field(default_factory=list)
+    # Each pair: (midi_pitch, note_token)
 
 
 def aggregate_to_words(parsed: Dict[str, Any]) -> List[ASTWord]:
     """Aggregate parse_transcription_text output into word-level structure.
 
-    Two types of continuation entries are merged into the preceding word:
-    - '⌒' (SLUR-based melisma): explicit continuation from ``<SLUR>`` token
-    - '·' (orphan pitch): pitch appeared without a preceding character,
-      common in model-generated pseudo-melisma
-
-    This ensures a single word may carry multiple (pitch, note, dur) tuples.
+    '·' (orphan pitch) entries are merged into the preceding word,
+    common in model-generated pseudo-melisma.
+    This ensures a single word may carry multiple (pitch, note) tuples.
     """
     words: List[ASTWord] = []
-    for w, p, n, d in zip(
-        parsed["words"], parsed["pitches"],
-        parsed["notes"], parsed["durations"],
-    ):
-        if w in ("⌒", "·") and words:
-            # Melisma / pseudo-melisma → append to previous word
-            words[-1].pairs.append((p, n, d))
+    for w, p, n in zip(parsed["words"], parsed["pitches"], parsed["notes"]):
+        if w == "·" and words:
+            # Pseudo-melisma → append to previous word
+            words[-1].pairs.append((p, n))
         else:
-            words.append(ASTWord(char=w, pairs=[(p, n, d)]))
+            words.append(ASTWord(char=w, pairs=[(p, n)]))
     return words
 
 
@@ -213,8 +190,8 @@ def _beats_to_note_token(beats: float) -> str:
 
 
 def _merge_same_pitch_pairs(
-    pairs: List[Tuple[int, str, Optional[float]]],
-) -> List[Tuple[int, str, Optional[float]]]:
+    pairs: List[Tuple[int, str]],
+) -> List[Tuple[int, str]]:
     """Merge consecutive pairs that share the same pitch (tie resolution).
 
     Models sometimes predict "pseudo-melisma" — multiple consecutive notes
@@ -228,31 +205,24 @@ def _merge_same_pitch_pairs(
     notational *choices*.
 
     Beat-durations are summed and mapped back to the closest NOTE token.
-    Physical durations (if present) are also summed.
     """
     if len(pairs) <= 1:
         return pairs
 
-    merged: List[Tuple[int, str, Optional[float]]] = []
+    merged: List[Tuple[int, str]] = []
     i = 0
     while i < len(pairs):
-        pitch, note, dur = pairs[i]
+        pitch, note = pairs[i]
         acc_beats = NOTE_DUR_MAP.get(note, 1.0)
-        acc_dur = dur  # physical duration (seconds) or None
 
         # Absorb consecutive pairs with the same pitch
         j = i + 1
         while j < len(pairs) and pairs[j][0] == pitch:
-            _, next_note, next_dur = pairs[j]
-            acc_beats += NOTE_DUR_MAP.get(next_note, 1.0)
-            if acc_dur is not None and next_dur is not None:
-                acc_dur += next_dur
-            elif next_dur is not None:
-                acc_dur = next_dur
+            acc_beats += NOTE_DUR_MAP.get(pairs[j][1], 1.0)
             j += 1
 
         merged_note = _beats_to_note_token(acc_beats) if j > i + 1 else note
-        merged.append((pitch, merged_note, acc_dur))
+        merged.append((pitch, merged_note))
         i = j
 
     return merged
@@ -330,7 +300,6 @@ def _needleman_wunsch(seq_a, seq_b, eq_fn=None, gap_penalty=1):
 def compute_metrics(
     gt_text: str,
     pred_text: str,
-    include_dur: bool = False,
     inference_only_metrics: bool = False,
     length_matched_lyric_eval: bool = False,
 ) -> Optional[Dict[str, Any]]:
@@ -338,7 +307,7 @@ def compute_metrics(
 
     Two-layer alignment:
       Layer 1 — Word-level Needleman-Wunsch on aggregated characters → CER
-      Layer 2 — Pair-level NW within each aligned word pair → Pitch/Note/Dur MAE
+      Layer 2 — Pair-level NW within each aligned word pair → Pitch/Note MAE
 
     Two CER variants are always computed:
       - ``cer``: Lyrics-only CER (AP/SP excluded), comparable to standard ASR.
@@ -347,22 +316,20 @@ def compute_metrics(
     Args:
         gt_text: Ground-truth AST text (as produced by build_interleaved_text).
         pred_text: Predicted AST text (from model.generate).
-        include_dur: Whether to compute duration MAE (requires <dur_X.XX> tokens).
         inference_only_metrics: When True, also compute pitch_error_rate and
             note_num_mean_error (skipped during validation to avoid overhead).
         length_matched_lyric_eval: For datasets whose GT "word" units are not
             in the same symbol space as model output (e.g. phoneme groups vs
             Chinese characters), require that GT/pred lyric lengths match after
             removing AP/SP, then align lyric words strictly by position for
-            pair-level pitch/note/duration metrics. If lengths mismatch, skip
+            pair-level pitch/note metrics. If lengths mismatch, skip
             the sample by returning None. CER remains the original literal
             token-level metric and is not corrected by this fallback.
 
     Returns:
         Dict with metrics, or None if either sequence cannot be parsed.
         Keys: cer, cer_singing, pitch_mae, note_mae, bpm_mae,
-              dur_mae (if include_dur),
-              n_gt_words, n_pred_words, n_aligned_pairs.
+              abs_note_dur_mae, n_gt_words, n_pred_words, n_aligned_pairs.
     """
     gt_parsed = parse_transcription_text(gt_text)
     pred_parsed = parse_transcription_text(pred_text)
@@ -372,21 +339,19 @@ def compute_metrics(
 
     # Handle unparseable predictions (early training garbage)
     if pred_parsed is None:
-        n_gt = len(set(range(len(gt_parsed["words"]))))  # count GT words
+        n_gt = len(gt_parsed["words"])
         gt_words = aggregate_to_words(gt_parsed)
-        result = {
+        return {
             "cer": 1.0,
             "cer_singing": 1.0,
             "pitch_mae": float("nan"),
             "note_mae": float("nan"),
             "bpm_mae": float("nan"),
+            "abs_note_dur_mae": float("nan"),
             "n_gt_words": len(gt_words),
             "n_pred_words": 0,
             "n_aligned_pairs": 0,
         }
-        if include_dur:
-            result["dur_mae"] = float("nan")
-        return result
 
     gt_words = aggregate_to_words(gt_parsed)
     pred_words = aggregate_to_words(pred_parsed)
@@ -406,11 +371,10 @@ def compute_metrics(
     n_gt = len(gt_words)
     cer_singing = (substitutions + deletions + insertions) / max(n_gt, 1)
 
-    # ── Layer 2: Pair-level alignment → Pitch / Note / Dur MAE ───────
+    # ── Layer 2: Pair-level alignment → Pitch / Note MAE ─────────────
 
     pitch_errors: List[float] = []
     note_errors: List[float] = []
-    dur_errors: List[float] = []
     abs_note_dur_errors: List[float] = []  # absolute note duration (seconds)
     pitch_binary_errors: List[float] = []  # 0/1 per aligned pair (for PER)
     note_num_diffs: List[float] = []       # |n_gt - n_pred| per word pair
@@ -437,7 +401,7 @@ def compute_metrics(
         if inference_only_metrics:
             note_num_diffs.append(abs(len(g_pairs) - len(p_pairs)))
 
-        # Align (pitch, note, dur) pairs within this word pair
+        # Align (pitch, note) pairs within this word pair
         pair_alignment = _needleman_wunsch(
             g_pairs, p_pairs,
             eq_fn=lambda a, b: a[0] == b[0] and a[1] == b[1],
@@ -464,10 +428,6 @@ def compute_metrics(
             g_abs = g_note_dur * gt_beat_dur
             p_abs = p_note_dur * pred_beat_dur
             abs_note_dur_errors.append(abs(math.log2(g_abs) - math.log2(p_abs)))
-
-            # Duration MAE (seconds)
-            if include_dur and g_pair[2] is not None and p_pair[2] is not None:
-                dur_errors.append(abs(g_pair[2] - p_pair[2]))
 
     # ── CER (lyrics-only, AP/SP excluded) ─────────────────────────────
 
@@ -499,8 +459,6 @@ def compute_metrics(
         "n_pred_words": len(pred_words),
         "n_aligned_pairs": len(pitch_errors),
     }
-    if include_dur:
-        result["dur_mae"] = _safe_mean(dur_errors)
     if inference_only_metrics:
         result["pitch_error_rate"] = _safe_mean(pitch_binary_errors)
         result["note_num_mean_error"] = _safe_mean(note_num_diffs)
@@ -514,7 +472,6 @@ def compute_metrics(
 
 def aggregate_metrics(
     metrics_list: List[Dict[str, Any]],
-    include_dur: bool = False,
     inference_only_metrics: bool = False,
 ) -> Dict[str, float]:
     """Aggregate per-sample AST metrics into dataset-level statistics.
@@ -526,7 +483,6 @@ def aggregate_metrics(
 
     Args:
         metrics_list: List of dicts from compute_metrics().
-        include_dur: Whether dur_mae should be included.
 
     Returns:
         Dict with aggregated metrics (mean values) and sample count.
@@ -535,8 +491,6 @@ def aggregate_metrics(
         return {}
 
     keys = ["cer", "cer_singing", "pitch_mae", "note_mae", "abs_note_dur_mae", "bpm_mae"]
-    if include_dur:
-        keys.append("dur_mae")
     if inference_only_metrics:
         keys.extend(["pitch_error_rate", "note_num_mean_error"])
 

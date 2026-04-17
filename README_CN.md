@@ -2,7 +2,7 @@
 
 **VocalParse** 是从 [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR) 中抽离出的最小开源子仓库，保留了 VocalParse 相关的核心训练、验证、推理、预处理和评估链路，同时去掉了无关实验分支和外围基线代码。
 
-它将歌唱音频转录为统一的自回归结构化序列，包含歌词、音高、音符时值、可选物理时长和全局 BPM。
+它将歌唱音频转录为统一的自回归结构化序列，包含歌词、音高、音符时值和全局 BPM。
 
 ## 特性
 
@@ -27,7 +27,7 @@
                     感 <P_68> <NOTE_4> 受 <P_60> <NOTE_8> ... <BPM_89>
 ```
 
-VocalParse 扩展了 Qwen3-ASR 的词表，新增约 1,400 个 AST token，包括音高（`<P_0>` 到 `<P_127>`）、音符时值（`<NOTE_*>`）、速度（`<BPM_*>`）和物理时长（`<dur_*>`）。完整列表参见 [docs/note_tokens.md](docs/note_tokens.md)。
+VocalParse 扩展了 Qwen3-ASR 的词表，新增约 400 个 AST token，包括音高（`<P_0>` 到 `<P_127>`）、音符时值（`<NOTE_*>`）和速度（`<BPM_*>`）。完整列表参见 [docs/note_tokens.md](docs/note_tokens.md)。
 
 ## 预训练模型
 
@@ -117,7 +117,6 @@ preprocessed_dir: "/path/to/preprocessed"
 val_datasets:
   - opencpop
 bpm_position: "last"
-include_dur: false
 asr_cot: true
 batch_size: 64
 lr: 2e-5
@@ -150,7 +149,6 @@ val_datasets:
 mode: "test_full"
 inference_mode: "audio-only"
 bpm_position: "last"
-include_dur: false
 ```
 
 运行：
@@ -229,7 +227,7 @@ val_datasets:
 - `test_weak`
   只计算 CER。适用于原始音频 JSON 和预处理数据。
 - `test_full`
-  计算完整 AST 指标，包括 CER、Pitch MAE、Note MAE、可选 Duration MAE 和 BPM MAE。必须使用 `preprocessed_dir`。
+  计算完整 AST 指标，包括 CER、Pitch MAE、Note MAE 和 BPM MAE。必须使用 `preprocessed_dir`。
 - `annotation`
   导出 Opencpop 风格的逐样本标注 JSON。两种输入方式都支持。
 
@@ -242,12 +240,6 @@ val_datasets:
   ^         ^         ^         ^
  歌词     音高      歌词     音高
           音符                音符
-```
-
-当 `include_dur: true` 时：
-
-```text
-感 <dur_0.25> <P_68> <NOTE_4> 受 <dur_0.50> <P_60> <NOTE_8> ... <BPM_89>
 ```
 
 当 `asr_cot: true` 时：
@@ -265,7 +257,6 @@ val_datasets:
 | `model_path` | `Qwen/Qwen3-ASR-1.7B` | 基座模型（HuggingFace ID 或本地路径） |
 | `output_dir` | `./vocalparse-runs/default` | Checkpoint 和 TensorBoard 日志目录。目录下已有 checkpoint 时自动续训。 |
 | `bpm_position` | `"last"` | `<BPM_*>` token 的位置：`"first"` 或 `"last"`。推荐使用 `"last"`（见下）。 |
-| `include_dur` | `false` | 是否插入 `<dur_X.XX>` 物理时长 token |
 | `asr_cot` | `false` | Chain-of-Thought 模式：先输出纯歌词，再输出交错乐谱 |
 | `batch_size` | `8` | 每设备 batch size（动态批处理开启时为上限） |
 | `max_batch_mel_tokens` | `0` | 动态批处理 mel 帧总数预算（0 = 禁用） |
@@ -285,7 +276,6 @@ val_datasets:
 以下 prompt 格式相关配置一旦变化，需要重新训练模型，但不需要重新预处理数据：
 
 - `bpm_position`
-- `include_dur`
 - `asr_cot`
 
 ## 训练监控
@@ -298,7 +288,6 @@ VocalParse 在 `output_dir` 下写入 TensorBoard 日志。验证回调每隔 `e
 | `val/cer_singing` | 歌词 CER（含静音） | 包含 AP/SP token |
 | `val/pitch_mae` | Pitch MAE | MIDI 半音级绝对误差 |
 | `val/note_mae` | Note MAE | log₂ 音符时值空间绝对误差 |
-| `val/dur_mae` | Duration MAE | 物理时长绝对误差（秒），仅 `include_dur: true` 时 |
 | `val/bpm_mae` | BPM MAE | 速度绝对误差 |
 
 每次验证还会记录 `val_display_samples` 张 GT vs Pred 乐谱对比图。
@@ -311,7 +300,6 @@ VocalParse 在 `output_dir` 下写入 TensorBoard 日志。验证回调每隔 `e
 | `CER (singing)` | 包含静音 token 的歌词字符错误率 |
 | `Pitch MAE` | MIDI 半音级绝对误差 |
 | `Note MAE` | log2 音符时值空间绝对误差 |
-| `Duration MAE` | 物理时长秒级绝对误差 |
 | `BPM MAE` | 速度绝对误差 |
 
 指标通过两层 Needleman-Wunsch 对齐计算：

@@ -1,9 +1,7 @@
 # coding=utf-8
 # VocalParse Prompt Construction and Annotation Conversion
 
-from typing import Any, Dict, List, Optional
-
-from vocalparse.tokens import _quantize_dur
+from typing import Dict, List
 
 
 # Non-lyrics characters to exclude in lyrics-conditioned mode
@@ -15,11 +13,9 @@ def convert_annotation_to_syllables(
     pitches: List[int],
     notes: List[str],
     pitch2word: List[int],
-    pitch_durs: Optional[List[float]] = None,
 ) -> List[Dict]:
     """Convert annotation format to syllables format."""
     syllables = []
-    has_durs = pitch_durs is not None and len(pitch_durs) > 0
 
     word_to_pitches: Dict[int, List[int]] = {}
     for pitch_idx, word_idx in enumerate(pitch2word):
@@ -36,17 +32,11 @@ def convert_annotation_to_syllables(
             pitch_idx = pitch_indices[0]
             pitch = pitches[pitch_idx] if pitch_idx < len(pitches) else 0
             note = notes[pitch_idx] if pitch_idx < len(notes) else "<NOTE_4>"
-            syl: Dict[str, Any] = {"char": word, "pitch": pitch, "note": note}
-            if has_durs:
-                syl["pitch_dur"] = pitch_durs[pitch_idx] if pitch_idx < len(pitch_durs) else 0.0
-            syllables.append(syl)
+            syllables.append({"char": word, "pitch": pitch, "note": note})
         else:
             pitch_list = [pitches[i] if i < len(pitches) else 0 for i in pitch_indices]
             note_list = [notes[i] if i < len(notes) else "<NOTE_4>" for i in pitch_indices]
-            syl = {"char": word, "pitch": pitch_list, "note": note_list}
-            if has_durs:
-                syl["pitch_dur"] = [pitch_durs[i] if i < len(pitch_durs) else 0.0 for i in pitch_indices]
-            syllables.append(syl)
+            syllables.append({"char": word, "pitch": pitch_list, "note": note_list})
 
     return syllables
 
@@ -58,21 +48,13 @@ def expand_syllables(syllables: List[Dict]) -> List[Dict]:
         pitch = syl['pitch']
         note = syl['note']
         char = syl['char']
-        pitch_dur = syl.get('pitch_dur')
 
         if isinstance(pitch, list):
             notes_list = note if isinstance(note, list) else [note] * len(pitch)
-            durs = pitch_dur if isinstance(pitch_dur, list) else [pitch_dur] * len(pitch) if pitch_dur is not None else [None] * len(pitch)
-            for p, n, d in zip(pitch, notes_list, durs):
-                row: Dict[str, Any] = {'char': char, 'pitch': p, 'note': n, 'word_idx': word_idx}
-                if d is not None:
-                    row['pitch_dur'] = d
-                expanded.append(row)
+            for p, n in zip(pitch, notes_list):
+                expanded.append({'char': char, 'pitch': p, 'note': n, 'word_idx': word_idx})
         else:
-            row = {'char': char, 'pitch': pitch, 'note': note, 'word_idx': word_idx}
-            if pitch_dur is not None:
-                row['pitch_dur'] = pitch_dur
-            expanded.append(row)
+            expanded.append({'char': char, 'pitch': pitch, 'note': note, 'word_idx': word_idx})
 
     return expanded
 
@@ -96,7 +78,6 @@ def build_interleaved_text(
     syllables: List[Dict],
     bpm: int,
     bpm_position: str = "last",
-    include_dur: bool = False,
 ) -> str:
     """Build interleaved lyric-note text from syllables."""
     tokens: List[str] = []
@@ -115,11 +96,6 @@ def build_interleaved_text(
 
         if not is_melisma:
             tokens.append(char)
-
-        if include_dur:
-            pitch_dur = syl.get("pitch_dur")
-            if pitch_dur is not None and isinstance(pitch_dur, (int, float)):
-                tokens.append(_quantize_dur(float(pitch_dur)))
 
         pitch = syl.get("pitch", 0)
         note = syl.get("note", "<NOTE_4>")

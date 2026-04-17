@@ -36,10 +36,8 @@ val_datasets:
 
 # ── Prompt Format ───────────────────────────────────────────────
 # bpm_position: "first" or "last" (changing requires retraining)
-# include_dur:  whether to insert <dur_X.XX> tokens
 # asr_cot:      Chain-of-Thought mode (lyrics then interleaved score)
 bpm_position: "last"
-include_dur: false
 asr_cot: true
 
 # ── Training Hyper-parameters ───────────────────────────────────

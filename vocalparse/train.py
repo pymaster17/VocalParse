@@ -305,7 +305,6 @@ def _load_config(args_cli):
         "max_samples": args_cli.max_samples if args_cli.max_samples != -1 else config.get("max_samples", -1),
         "preprocessed_dir": args_cli.preprocessed_dir or config.get("preprocessed_dir", ""),
         "bpm_position": config.get("bpm_position", "last"),
-        "include_dur": bool(config.get("include_dur", False)),
         "asr_cot": bool(config.get("asr_cot", False)),
         "config": config,
     }
@@ -397,12 +396,11 @@ def _load_data(cfg, config, model, processor, args_cli):
             prefix_text=prefix_text,
             eos=eos,
             bpm_position=cfg["bpm_position"],
-            include_dur=cfg["include_dur"],
             asr_cot=cfg["asr_cot"],
             pad_token_id=pad_id,
             audio_token_id=audio_tid,
         )
-        print(f"Using DataCollatorForPrecomputedMel (bpm_position={cfg['bpm_position']}, include_dur={cfg['include_dur']}, asr_cot={cfg['asr_cot']})")
+        print(f"Using DataCollatorForPrecomputedMel (bpm_position={cfg['bpm_position']}, asr_cot={cfg['asr_cot']})")
     else:
         collator = DataCollatorForVocalParse(
             processor=processor,
@@ -479,7 +477,6 @@ def _build_trainer(cfg, config, model, processor, args_cli,
             prefix_text=prefix_text if data_format == "hf_dataset" else "",
             eos=eos if data_format == "hf_dataset" else "",
             bpm_position=cfg["bpm_position"],
-            include_dur=cfg["include_dur"],
             asr_cot=cfg["asr_cot"],
         ))
 
@@ -568,7 +565,7 @@ def main():
         _bpm = int(_s0["bpm"])
         _ast_text = build_interleaved_text(
             syllables=_syllables, bpm=_bpm,
-            bpm_position=cfg["bpm_position"], include_dur=cfg["include_dur"],
+            bpm_position=cfg["bpm_position"],
         )
         if cfg["asr_cot"]:
             _cot_lyrics = extract_lyrics_text(_syllables)
@@ -578,7 +575,7 @@ def main():
         _full = prefix_text + _target + eos
         print(f"\n{'='*60}")
         print(f"[Prompt] Structure (sample 0):")
-        print(f"  bpm_position={cfg['bpm_position']}  include_dur={cfg['include_dur']}  asr_cot={cfg['asr_cot']}")
+        print(f"  bpm_position={cfg['bpm_position']}  asr_cot={cfg['asr_cot']}")
         print(f"  PREFIX ({len(prefix_text)} chars):")
         print(f"    {prefix_text}")
         print(f"  TARGET ({len(_target)} chars):")

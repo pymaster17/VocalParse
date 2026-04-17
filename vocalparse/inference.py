@@ -245,7 +245,6 @@ def generate_batch(model, tokenizer, samples, device, cfg):
     from vocalparse.prompts import build_interleaved_text
 
     bpm_position = cfg.get("bpm_position", "last")
-    include_dur = cfg.get("include_dur", False)
     max_new_tokens = int(cfg.get("max_new_tokens", 512))
     prefix_text = cfg["_prefix_text"]
 
@@ -275,7 +274,6 @@ def generate_batch(model, tokenizer, samples, device, cfg):
         ast_text = build_interleaved_text(
             syllables=prompt_syllables, bpm=bpm,
             bpm_position=bpm_position,
-            include_dur=include_dur,
         )
         gt_texts.append(f"language Chinese<asr_text>{ast_text}")
 
@@ -443,7 +441,6 @@ def _prepare_batch_tensors(tokenizer, samples, cfg):
     from vocalparse.prompts import build_interleaved_text
 
     bpm_position = cfg.get("bpm_position", "last")
-    include_dur = cfg.get("include_dur", False)
     prefix_text = cfg["_prefix_text"]
 
     base_prefix_ids = tokenizer(
@@ -472,7 +469,6 @@ def _prepare_batch_tensors(tokenizer, samples, cfg):
         ast_text = build_interleaved_text(
             syllables=prompt_syllables, bpm=bpm,
             bpm_position=bpm_position,
-            include_dur=include_dur,
         )
         gt_texts.append(f"language Chinese<asr_text>{ast_text}")
 

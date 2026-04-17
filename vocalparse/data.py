@@ -477,7 +477,6 @@ class DataCollatorForPrecomputedMel:
     prefix_text: str = ""
     eos: str = ""
     bpm_position: str = "last"
-    include_dur: bool = False
     asr_cot: bool = False        # Chain-of-Thought: prepend pure lyrics before AST
     pad_token_id: int = 151643
     audio_token_id: int = 151676  # <|audio_pad|>
@@ -506,7 +505,6 @@ class DataCollatorForPrecomputedMel:
             ast_text = build_interleaved_text(
                 syllables=syllables, bpm=bpm,
                 bpm_position=self.bpm_position,
-                include_dur=self.include_dur,
             )
 
             # ASR-CoT: prepend pure lyrics as Chain-of-Thought prefix

@@ -1,6 +1,6 @@
 # VocalParse AST Token Reference
 
-VocalParse extends the Qwen3-ASR tokenizer with approximately 1,400 AST-specific tokens.
+VocalParse extends the Qwen3-ASR tokenizer with approximately 400 AST-specific tokens.
 
 ## Pitch Tokens
 
@@ -48,33 +48,11 @@ A single global token per song. The nominal duration of a note in seconds is:
 Note^d = 60 / BPM * Note^v
 ```
 
-## Physical Duration Tokens
-
-1,000 tokens quantizing physical duration in 0.01-second steps:
-
-```
-<dur_0.01>, <dur_0.02>, ..., <dur_10.00>
-```
-
-Used when `include_dur: true` in the training/inference configuration.
-
-## Special Tokens
-
-| Token | Meaning |
-|---|---|
-| <SLUR> | Melisma indicator (one word, multiple notes) |
-| <SVS_MASK> | Masking token for singing voice synthesis |
-
 ## Example Sequences
 
-### Standard (BPM-last, no duration)
+### Standard (BPM-last)
 ```
 感 <P_68> <NOTE_4> 受 <P_60> <NOTE_8> ... <BPM_89>
-```
-
-### With physical duration (Chain-of-Thought)
-```
-感 <dur_0.25> <P_68> <NOTE_4> 受 <dur_0.50> <P_60> <NOTE_8> ... <BPM_89>
 ```
 
 ### Chain-of-Thought (CoT) with lyrics prefix

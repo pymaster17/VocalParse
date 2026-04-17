@@ -115,7 +115,6 @@ def _output_test_full(results, cfg):
     """
     from vocalparse.evaluation import compute_metrics, aggregate_metrics
 
-    include_dur = bool(cfg.get("include_dur", False))
     length_matched_lyric_eval = bool(cfg.get("length_matched_lyric_eval", False))
     output_file = cfg.get("output", "")
     display_count = int(cfg.get("display", 20))
@@ -143,7 +142,6 @@ def _output_test_full(results, cfg):
         try:
             m = compute_metrics(
                 r["gt_ast"], r["pred"],
-                include_dur=include_dur,
                 inference_only_metrics=True,
                 length_matched_lyric_eval=length_matched_lyric_eval,
             )
@@ -156,8 +154,7 @@ def _output_test_full(results, cfg):
 
     if all_metrics:
         agg = aggregate_metrics(
-            all_metrics, include_dur=include_dur,
-            inference_only_metrics=True,
+            all_metrics, inference_only_metrics=True,
         )
         n_total = int(agg.get("n_samples", 0))
         n_ok = int(agg.get("n_parseable", 0))
@@ -169,11 +166,6 @@ def _output_test_full(results, cfg):
             val = agg.get(key, float("nan"))
             if not math.isnan(val):
                 print(f"  {key:18s}: {val:.4f}")
-        if include_dur:
-            val = agg.get("dur_mae", float("nan"))
-            if not math.isnan(val):
-                print(f"  {'dur_mae':18s}: {val:.4f}")
-
         if unparseable_samples:
             print(f"\nUnparseable predictions ({n_total - n_ok} total, showing up to 5):")
             for idx, pred, gt in unparseable_samples:

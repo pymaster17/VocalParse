@@ -2,7 +2,7 @@
 
 **VocalParse** is a minimal open-source extraction of the VocalParse subsystem from [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR). It keeps the core training, validation, inference, preprocessing, and evaluation pipeline for unified singing voice transcription, while removing unrelated experimental branches and auxiliary baselines.
 
-The model transcribes singing audio into a structured autoregressive sequence containing lyrics, pitch, note values, optional physical durations, and global tempo.
+The model transcribes singing audio into a structured autoregressive sequence containing lyrics, pitch, note values, and global tempo.
 
 ## Features
 
@@ -13,7 +13,7 @@ The model transcribes singing audio into a structured autoregressive sequence co
   - `audio-lyric`: predict score from audio with ground-truth lyrics provided
 - Three inference outputs:
   - `test_weak`: lyric CER only
-  - `test_full`: lyric + pitch + note + duration + BPM metrics
+  - `test_full`: lyric + pitch + note + BPM metrics
   - `annotation`: export Opencpop-style annotation JSON
 - Built-in validation callback with TensorBoard score comparison figures
 - Dynamic batching by mel-frame budget for training and inference
@@ -27,7 +27,7 @@ Singing Audio (16kHz) -> Whisper Encoder -> Qwen LLM Decoder -> AST Token Sequen
                      感 <P_68> <NOTE_4> 受 <P_60> <NOTE_8> ... <BPM_89>
 ```
 
-VocalParse extends the Qwen3-ASR vocabulary with about 1,400 AST tokens for pitch (`<P_0>` to `<P_127>`), note value (`<NOTE_*>`), tempo (`<BPM_*>`), and physical duration (`<dur_*>`). See [docs/note_tokens.md](docs/note_tokens.md).
+VocalParse extends the Qwen3-ASR vocabulary with about 400 AST tokens for pitch (`<P_0>` to `<P_127>`), note value (`<NOTE_*>`), and tempo (`<BPM_*>`). See [docs/note_tokens.md](docs/note_tokens.md).
 
 ## Pretrained Model
 
@@ -117,7 +117,6 @@ preprocessed_dir: "/path/to/preprocessed"
 val_datasets:
   - opencpop
 bpm_position: "last"
-include_dur: false
 asr_cot: true
 batch_size: 64
 lr: 2e-5
@@ -150,7 +149,6 @@ val_datasets:
 mode: "test_full"
 inference_mode: "audio-only"
 bpm_position: "last"
-include_dur: false
 ```
 
 Run:
@@ -244,12 +242,6 @@ The interleaved AST format directly encodes lyric-note correspondence:
           note                note
 ```
 
-With `include_dur: true`:
-
-```text
-感 <dur_0.25> <P_68> <NOTE_4> 受 <dur_0.50> <P_60> <NOTE_8> ... <BPM_89>
-```
-
 With `asr_cot: true`:
 
 ```text
@@ -265,7 +257,6 @@ Key parameters and their defaults:
 | `model_path` | `Qwen/Qwen3-ASR-1.7B` | Base model (HuggingFace ID or local path) |
 | `output_dir` | `./vocalparse-runs/default` | Checkpoint and TensorBoard log directory. Existing checkpoints trigger auto-resume. |
 | `bpm_position` | `"last"` | Where to place the `<BPM_*>` token: `"first"` or `"last"`. `"last"` is recommended (see below). |
-| `include_dur` | `false` | Insert `<dur_X.XX>` physical duration tokens |
 | `asr_cot` | `false` | Chain-of-Thought mode: output pure lyrics before the interleaved score |
 | `batch_size` | `8` | Per-device batch size (upper bound when dynamic batching is on) |
 | `max_batch_mel_tokens` | `0` | Dynamic batching mel-frame budget per batch (0 = disabled) |
@@ -285,7 +276,6 @@ Experiments show that `bpm_position: "last"` consistently outperforms `"first"`.
 Changing these prompt-format settings requires retraining the model, but not re-running preprocessing:
 
 - `bpm_position`
-- `include_dur`
 - `asr_cot`
 
 ## Training Monitoring
@@ -298,7 +288,6 @@ VocalParse logs to TensorBoard in `output_dir`. The validation callback runs `mo
 | `val/cer_singing` | Lyric CER (with silence) | Includes AP/SP tokens |
 | `val/pitch_mae` | Pitch MAE | Absolute error in MIDI semitones |
 | `val/note_mae` | Note MAE | Absolute error in log₂ note-value space |
-| `val/dur_mae` | Duration MAE | Seconds; only when `include_dur: true` |
 | `val/bpm_mae` | BPM MAE | Absolute tempo error |
 
 Score comparison figures (GT vs Pred lyric rows and MIDI rows) are also logged per `val_display_samples`.
@@ -311,7 +300,6 @@ Score comparison figures (GT vs Pred lyric rows and MIDI rows) are also logged p
 | `CER (singing)` | Character error rate including silence tokens |
 | `Pitch MAE` | Absolute pitch error in MIDI semitones |
 | `Note MAE` | Absolute error in log2 note-value space |
-| `Duration MAE` | Absolute physical duration error in seconds |
 | `BPM MAE` | Absolute tempo error |
 
 Metrics are computed with two-stage Needleman-Wunsch alignment:

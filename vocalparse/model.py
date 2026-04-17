@@ -54,8 +54,8 @@ def load_audio(path: str, sr: int = 16000):
 
 def register_vocalparse_tokens(processor, model) -> int:
     """Add AST special tokens to the tokenizer and resize model embeddings."""
-    pitch_tokens, note_tokens, bpm_tokens, _, special_tokens, dur_tokens = get_token_maps()
-    new_tokens = pitch_tokens + note_tokens + bpm_tokens + special_tokens + dur_tokens
+    pitch_tokens, note_tokens, bpm_tokens, _ = get_token_maps()
+    new_tokens = pitch_tokens + note_tokens + bpm_tokens
     num_added = processor.tokenizer.add_tokens(new_tokens)
     if num_added > 0:
         new_vocab_size = len(processor.tokenizer)
