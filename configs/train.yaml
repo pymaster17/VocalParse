@@ -1,0 +1,59 @@
+# VocalParse Training Configuration
+# ----------------------------------------------------------------
+# Usage:
+#   python -m vocalparse.train --config configs/train.yaml
+#
+#   # Multi-GPU:
+#   torchrun --nproc_per_node=2 -m vocalparse.train --config configs/train.yaml
+
+# Pre-trained Qwen3-ASR model path (HuggingFace or local)
+model_path: Qwen/Qwen3-ASR-1.7B
+
+# Output directory for checkpoints AND TensorBoard logs.
+# Existing checkpoints trigger auto-resume. Change for a new experiment.
+output_dir: ./vocalparse-runs/experiment-1
+
+# Training data source. Use EITHER:
+# 1. preprocessed_dir (recommended, no audio I/O during training), OR
+# 2. datasets (raw scan at startup; see commented example below).
+preprocessed_dir: "/path/to/preprocessed"
+
+# Optional raw dataset loading when preprocessed_dir is not provided.
+# datasets:
+#   - name: opencpop
+#     type: json_file
+#     json_path: /path/to/Opencpop.json
+#     audio_root: /path/to/Opencpop
+#
+#   - name: cloudmusic
+#     type: folder_based
+#     dataset_root: /path/to/cloudmusic
+
+# ── Validation Split ──────────────────────────────────────────
+# Datasets designated as validation (must match preprocessing names)
+val_datasets:
+  - opencpop
+
+# ── Prompt Format ───────────────────────────────────────────────
+# bpm_position: "first" or "last" (changing requires retraining)
+# include_dur:  whether to insert <dur_X.XX> tokens
+# asr_cot:      Chain-of-Thought mode (lyrics then interleaved score)
+bpm_position: "last"
+include_dur: false
+asr_cot: true
+
+# ── Training Hyper-parameters ───────────────────────────────────
+batch_size: 64
+grad_acc: 1
+lr: 2e-5
+epochs: 10
+warmup_ratio: 0.2
+lr_scheduler: "inverse_sqrt"
+save_steps: 10000
+eval_steps: 2000
+val_generate_samples: 5
+val_display_samples: 5
+
+# ── Dynamic Batching ────────────────────────────────────────────
+# Max total mel frames per batch (0 = disabled)
+max_batch_mel_tokens: 24000

@@ -1,0 +1,37 @@
+# VocalParse Data Preprocessor Configuration
+# ----------------------------------------------------------------
+# Precomputes mel spectrograms and saves to Arrow format for fast
+# loading during training.
+#
+# Usage:
+#   python scripts/preprocess.py --config configs/preprocess.yaml
+#   python scripts/preprocess.py --config configs/preprocess.yaml --num_workers 16
+
+# Pre-trained Qwen3-ASR model path (for feature extractor)
+model_path: Qwen/Qwen3-ASR-0.6B
+
+# Output directory for Arrow shards
+output_dir: "/path/to/preprocessed"
+
+# Maximum samples to process (-1 for all)
+max_samples: -1
+
+# ── Datasets ────────────────────────────────────────────────────
+# Supported types: folder_based, json_file
+#
+# For json_file:
+#   json_path  : path to annotation JSON
+#   audio_root : root directory for audio files
+#
+# For folder_based:
+#   dataset_root : root directory containing song_id/ subfolders
+#
+datasets:
+  - name: mydataset
+    type: json_file
+    json_path: /path/to/annotations.json
+    audio_root: /path/to/audio
+
+  # - name: mydataset2
+  #   type: folder_based
+  #   dataset_root: /path/to/dataset_root

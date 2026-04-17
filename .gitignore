@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Lock files
+uv.lock
+
+# Data & artifacts (users provide their own)
+*.json
+*.arrow
+*.safetensors
+*.pt
+*.pth
+*.bin
+*.onnx
+
+# Training outputs
+vocalparse-runs/
+results/
+checkpoints/

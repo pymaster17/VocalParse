@@ -1,0 +1,65 @@
+# VocalParse Inference Configuration
+# ----------------------------------------------------------------
+# Usage:
+#   python -m vocalparse.inference --config configs/inference.yaml
+#
+#   # Multi-GPU:
+#   torchrun --nproc_per_node=2 -m vocalparse.inference --config configs/inference.yaml
+
+# ── Checkpoint ──────────────────────────────────────────────────
+# Path to a checkpoint directory. Can also point to a training
+# output_dir — the latest checkpoint-* will be auto-detected.
+checkpoint: /path/to/checkpoint
+
+# ── Data ────────────────────────────────────────────────────────
+# Use EITHER preprocessed_dir OR audio_json (not both).
+
+# Option A: preprocessed Arrow data
+preprocessed_dir: "/path/to/preprocessed"
+
+# Option B: raw audio JSON list
+# The JSON can be:
+#   - ["/abs/path/a.wav", "/abs/path/b.flac"]
+#   - [{"audio_path": "a.wav", "text": "歌词"}, ...]
+# audio_json: "/path/to/audio_list.json"
+# audio_root: "/path/to/audio/root"
+
+# Validation datasets (for preprocessed_dir mode)
+val_datasets:
+  - opencpop
+
+# Number of samples to process (-1 = all)
+num_samples: -1
+
+# ── Mode ────────────────────────────────────────────────────────
+# "test_weak"   : CER-only evaluation
+# "test_full"   : Full metrics — CER, pitch, note, BPM (preprocessed only)
+# "annotation"  : Annotation export (raw audio or preprocessed)
+mode: "test_full"
+
+# Inference condition:
+#   "audio-only" : predict lyrics + score from audio only
+#   "audio-lyric": predict score given GT lyrics (CoT models only)
+inference_mode: "audio-only"
+
+# For datasets whose GT "word" field is phoneme groups rather than
+# characters, align by position after length matching.
+length_matched_lyric_eval: false
+
+# ── Prompt Format ───────────────────────────────────────────────
+bpm_position: "last"
+include_dur: false
+
+# ── Generation ──────────────────────────────────────────────────
+max_new_tokens: 512
+
+# Dynamic batching
+batch_mel_tokens: 48000
+batch_size: 256
+
+# Attention: flash_attention_2 (recommended), sdpa, or eager
+attn_implementation: flash_attention_2
+
+# ── Output ──────────────────────────────────────────────────────
+output: "results/inference_output.json"
+display: 20
