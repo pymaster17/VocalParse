@@ -227,7 +227,7 @@ When paths are relative, `audio_root` is prepended if provided.
 - `test_weak`
   CER-only evaluation. Works with raw audio JSON or preprocessed input.
 - `test_full`
-  Full AST evaluation with CER, pitch MAE, note MAE, optional duration MAE, and BPM MAE. Requires `preprocessed_dir`.
+  Full AST evaluation with CER, pitch MAE, note MAE, duration MAE, and BPM MAE. Requires `preprocessed_dir` (not supported with `audio_json`).
 - `annotation`
   Exports Opencpop-style per-sample annotation JSON. Works with either input type.
 
@@ -284,11 +284,11 @@ VocalParse logs to TensorBoard in `output_dir`. The validation callback runs `mo
 
 | TensorBoard Key | Metric | Notes |
 |---|---|---|
-| `val/cer` | Lyric CER | `(S+D+I) / N_gt`, silence tokens excluded |
-| `val/cer_singing` | Lyric CER (with silence) | Includes AP/SP tokens |
-| `val/pitch_mae` | Pitch MAE | Absolute error in MIDI semitones |
-| `val/note_mae` | Note MAE | Absolute error in log₂ note-value space |
-| `val/bpm_mae` | BPM MAE | Absolute tempo error |
+| `eval/cer` | Lyric CER | `(S+D+I) / N_gt`, silence tokens excluded |
+| `eval/pitch_mae` | Pitch MAE | Absolute error in MIDI semitones |
+| `eval/note_mae` | Note MAE | Absolute error in log₂ note-value space |
+| `eval/dur_mae` | Duration MAE | Absolute error in log₂ seconds, derived from `note × 60 / BPM` |
+| `eval/bpm_mae` | BPM MAE | Absolute tempo error |
 
 Score comparison figures (GT vs Pred lyric rows and MIDI rows) are also logged per `val_display_samples`.
 
@@ -297,10 +297,12 @@ Score comparison figures (GT vs Pred lyric rows and MIDI rows) are also logged p
 | Metric | Description |
 |---|---|
 | `CER` | Character error rate on lyrics, excluding silence tokens |
-| `CER (singing)` | Character error rate including silence tokens |
 | `Pitch MAE` | Absolute pitch error in MIDI semitones |
-| `Note MAE` | Absolute error in log2 note-value space |
+| `Note MAE` | Absolute error in log₂ note-value space |
+| `Duration MAE` | Absolute error in log₂ seconds (`note × 60 / BPM`) |
 | `BPM MAE` | Absolute tempo error |
+| `Pitch Error Rate` | Fraction of aligned pairs with mismatched pitch (inference only) |
+| `Note Num Mean Error` | Mean `|n_gt − n_pred|` note count difference per word (inference only) |
 
 Metrics are computed with two-stage Needleman-Wunsch alignment:
 

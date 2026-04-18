@@ -6,7 +6,6 @@
 #
 # Metrics:
 #   - CER              : Character Error Rate on lyrics only (AP/SP excluded)
-#   - CER (singing)    : Character Error Rate including AP/SP silence tokens
 #   - Pitch MAE        : Mean Absolute Error in semitones
 #   - Note MAE         : Mean Absolute Error in log2(note_duration) space
 #   - BPM MAE          : Tempo prediction error
@@ -309,10 +308,6 @@ def compute_metrics(
       Layer 1 — Word-level Needleman-Wunsch on aggregated characters → CER
       Layer 2 — Pair-level NW within each aligned word pair → Pitch/Note MAE
 
-    Two CER variants are always computed:
-      - ``cer``: Lyrics-only CER (AP/SP excluded), comparable to standard ASR.
-      - ``cer_singing``: Full CER including AP/SP silence tokens.
-
     Args:
         gt_text: Ground-truth AST text (as produced by build_interleaved_text).
         pred_text: Predicted AST text (from model.generate).
@@ -328,8 +323,8 @@ def compute_metrics(
 
     Returns:
         Dict with metrics, or None if either sequence cannot be parsed.
-        Keys: cer, cer_singing, pitch_mae, note_mae, bpm_mae,
-              abs_note_dur_mae, n_gt_words, n_pred_words, n_aligned_pairs.
+        Keys: cer, pitch_mae, note_mae, bpm_mae,
+              dur_mae, n_gt_words, n_pred_words, n_aligned_pairs.
     """
     gt_parsed = parse_transcription_text(gt_text)
     pred_parsed = parse_transcription_text(pred_text)
@@ -343,11 +338,10 @@ def compute_metrics(
         gt_words = aggregate_to_words(gt_parsed)
         return {
             "cer": 1.0,
-            "cer_singing": 1.0,
             "pitch_mae": float("nan"),
             "note_mae": float("nan"),
             "bpm_mae": float("nan"),
-            "abs_note_dur_mae": float("nan"),
+            "dur_mae": float("nan"),
             "n_gt_words": len(gt_words),
             "n_pred_words": 0,
             "n_aligned_pairs": 0,
@@ -364,12 +358,6 @@ def compute_metrics(
         gt_words, pred_words,
         eq_fn=lambda a, b: a.char == b.char,
     )
-
-    substitutions = sum(1 for g, p in word_alignment if g and p and g.char != p.char)
-    deletions = sum(1 for g, p in word_alignment if g and p is None)
-    insertions = sum(1 for g, p in word_alignment if g is None and p)
-    n_gt = len(gt_words)
-    cer_singing = (substitutions + deletions + insertions) / max(n_gt, 1)
 
     # ── Layer 2: Pair-level alignment → Pitch / Note MAE ─────────────
 
@@ -450,10 +438,9 @@ def compute_metrics(
 
     result = {
         "cer": cer_value,
-        "cer_singing": cer_singing,
         "pitch_mae": _safe_mean(pitch_errors),
         "note_mae": _safe_mean(note_errors),
-        "abs_note_dur_mae": _safe_mean(abs_note_dur_errors),
+        "dur_mae": _safe_mean(abs_note_dur_errors),
         "bpm_mae": float(abs(gt_parsed["bpm"] - pred_parsed["bpm"])),
         "n_gt_words": n_gt,
         "n_pred_words": len(pred_words),
@@ -478,9 +465,6 @@ def aggregate_metrics(
 
     NaN values (from unparseable predictions) are excluded from averages.
 
-    Both ``cer`` (lyrics-only) and ``cer_singing`` (with AP/SP) are always
-    aggregated.
-
     Args:
         metrics_list: List of dicts from compute_metrics().
 
@@ -490,7 +474,7 @@ def aggregate_metrics(
     if not metrics_list:
         return {}
 
-    keys = ["cer", "cer_singing", "pitch_mae", "note_mae", "abs_note_dur_mae", "bpm_mae"]
+    keys = ["cer", "pitch_mae", "note_mae", "dur_mae", "bpm_mae"]
     if inference_only_metrics:
         keys.extend(["pitch_error_rate", "note_num_mean_error"])
 

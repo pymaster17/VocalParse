@@ -227,7 +227,7 @@ val_datasets:
 - `test_weak`
   只计算 CER。适用于原始音频 JSON 和预处理数据。
 - `test_full`
-  计算完整 AST 指标，包括 CER、Pitch MAE、Note MAE 和 BPM MAE。必须使用 `preprocessed_dir`。
+  计算完整 AST 指标，包括 CER、Pitch MAE、Note MAE、Duration MAE 和 BPM MAE。必须使用 `preprocessed_dir`（不支持 `audio_json`）。
 - `annotation`
   导出 Opencpop 风格的逐样本标注 JSON。两种输入方式都支持。
 
@@ -284,11 +284,11 @@ VocalParse 在 `output_dir` 下写入 TensorBoard 日志。验证回调每隔 `e
 
 | TensorBoard Key | 指标 | 说明 |
 |---|---|---|
-| `val/cer` | 歌词 CER | `(S+D+I) / N_gt`，排除静音 token |
-| `val/cer_singing` | 歌词 CER（含静音） | 包含 AP/SP token |
-| `val/pitch_mae` | Pitch MAE | MIDI 半音级绝对误差 |
-| `val/note_mae` | Note MAE | log₂ 音符时值空间绝对误差 |
-| `val/bpm_mae` | BPM MAE | 速度绝对误差 |
+| `eval/cer` | 歌词 CER | `(S+D+I) / N_gt`，排除静音 token |
+| `eval/pitch_mae` | Pitch MAE | MIDI 半音级绝对误差 |
+| `eval/note_mae` | Note MAE | log₂ 音符时值空间绝对误差 |
+| `eval/dur_mae` | Duration MAE | log₂ 秒空间绝对误差，由 `note × 60 / BPM` 派生 |
+| `eval/bpm_mae` | BPM MAE | 速度绝对误差 |
 
 每次验证还会记录 `val_display_samples` 张 GT vs Pred 乐谱对比图。
 
@@ -297,10 +297,12 @@ VocalParse 在 `output_dir` 下写入 TensorBoard 日志。验证回调每隔 `e
 | 指标 | 说明 |
 |---|---|
 | `CER` | 排除静音 token 的歌词字符错误率 |
-| `CER (singing)` | 包含静音 token 的歌词字符错误率 |
 | `Pitch MAE` | MIDI 半音级绝对误差 |
-| `Note MAE` | log2 音符时值空间绝对误差 |
+| `Note MAE` | log₂ 音符时值空间绝对误差 |
+| `Duration MAE` | log₂ 秒空间绝对误差（`note × 60 / BPM`） |
 | `BPM MAE` | 速度绝对误差 |
+| `Pitch Error Rate` | 对齐 pair 中音高不匹配的比例（仅推理时报告） |
+| `Note Num Mean Error` | 每个词的 `|n_gt − n_pred|` 平均值（仅推理时报告） |
 
 指标通过两层 Needleman-Wunsch 对齐计算：
 

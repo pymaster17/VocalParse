@@ -344,10 +344,9 @@ class GenerateSamplesCallback(TrainerCallback):
 
             metric_keys = [
                 ("cer", "eval/cer"),
-                ("cer_singing", "eval/cer_singing"),
                 ("pitch_mae", "eval/pitch_mae"),
                 ("note_mae", "eval/note_mae"),
-                ("abs_note_dur_mae", "eval/abs_note_dur_mae"),
+                ("dur_mae", "eval/dur_mae"),
                 ("bpm_mae", "eval/bpm_mae"),
             ]
 

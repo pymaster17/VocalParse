@@ -160,8 +160,8 @@ def _output_test_full(results, cfg):
         n_ok = int(agg.get("n_parseable", 0))
 
         print(f"\nResults ({n_ok}/{n_total} parseable):")
-        for key in ["cer", "cer_singing", "pitch_mae", "note_mae",
-                     "abs_note_dur_mae", "bpm_mae",
+        for key in ["cer", "pitch_mae", "note_mae",
+                     "dur_mae", "bpm_mae",
                      "pitch_error_rate", "note_num_mean_error"]:
             val = agg.get(key, float("nan"))
             if not math.isnan(val):

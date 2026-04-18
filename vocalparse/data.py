@@ -89,14 +89,12 @@ def _process_one_song_folder(args):
         pitches = annotation.get("pitch", [])
         notes = annotation.get("note", [])
         pitch2word = annotation.get("pitch2word", [])
-        pitch_durs = annotation.get("pitch_dur", [])
 
         if not (pitches and notes and pitch2word):
             continue  # skip samples without score annotations
 
         syllables = convert_annotation_to_syllables(
-            words=words, pitches=pitches, notes=notes, pitch2word=pitch2word,
-            pitch_durs=pitch_durs or None)
+            words=words, pitches=pitches, notes=notes, pitch2word=pitch2word)
 
         samples.append({
             "audio_path": audio_entry.path,
@@ -199,7 +197,6 @@ def load_samples_from_json_file(
         pitches = item.get("pitch", [])
         notes = item.get("note", [])
         pitch2word = item.get("pitch2word", [])
-        pitch_durs = item.get("pitch_dur", [])
         bpm = item.get("bpm", 120)
         wav_fn = item.get("wav_fn", "")
 
@@ -214,8 +211,7 @@ def load_samples_from_json_file(
             continue  # skip samples without score annotations
 
         syllables = convert_annotation_to_syllables(
-            words=words, pitches=pitches, notes=notes, pitch2word=pitch2word,
-            pitch_durs=pitch_durs or None)
+            words=words, pitches=pitches, notes=notes, pitch2word=pitch2word)
 
         samples.append({
             "audio_path": audio_path,
