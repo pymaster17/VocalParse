@@ -72,7 +72,7 @@ uv pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu1
 uv pip install -e .
 ```
 
-Optional Flash Attention:
+Flash Attention is optional. The default install uses PyTorch SDPA, which works everywhere. If your environment supports it, you can install Flash Attention for a speedup:
 
 ```bash
 uv pip install -e ".[flash]"
@@ -80,24 +80,42 @@ uv pip install -e ".[flash]"
 
 Notes:
 - `qwen-asr` and all other dependencies are installed automatically.
-- If `flash-attn` is unavailable in your environment, use `sdpa` in the inference config instead.
+- With the default install, set `attn_implementation: sdpa` in the inference config (the training script does not require a flash-attn backend).
 - The pretrained checkpoint above is based on `Qwen/Qwen3-ASR-1.7B`.
 
 ## Quick Start
 
 ### 1. Preprocess Data
 
-Prepare a config like [configs/preprocess.yaml](configs/preprocess.yaml):
+Ready-to-use annotation JSONs for three public singing corpora are bundled under [data/](data/):
+
+| File | Samples | Dataset |
+|---|---|---|
+| [data/Opencpop.json](data/Opencpop.json) | 3,756 | [Opencpop](https://wenet.org.cn/opencpop/) |
+| [data/gtsinger.json](data/gtsinger.json) | 7,139 | [GTSinger](https://github.com/GTSinger/GTSinger) |
+| [data/m4singer.json](data/m4singer.json) | 20,896 | [M4Singer](https://github.com/M4Singer/M4Singer) |
+
+Download the raw audio from each dataset's official source and point `audio_root` at your local copy. A ready config is provided in [configs/preprocess.yaml](configs/preprocess.yaml):
 
 ```yaml
-model_path: Qwen/Qwen3-ASR-0.6B
+model_path: Qwen/Qwen3-ASR-1.7B
 output_dir: "/path/to/preprocessed"
 
 datasets:
   - name: opencpop
     type: json_file
-    json_path: /path/to/Opencpop.json
+    json_path: data/Opencpop.json
     audio_root: /path/to/Opencpop
+
+  - name: gtsinger
+    type: json_file
+    json_path: data/gtsinger.json
+    audio_root: /path/to/GTSinger
+
+  - name: m4singer
+    type: json_file
+    json_path: data/m4singer.json
+    audio_root: /path/to/m4singer
 ```
 
 Run:
@@ -105,6 +123,8 @@ Run:
 ```bash
 python scripts/preprocess.py --config configs/preprocess.yaml --num_workers 16
 ```
+
+To use your own dataset, produce a JSON list with fields `word`, `pitch`, `note`, `pitch2word`, `pitch_dur`, `word_dur`, `wav_fn`, `bpm` (see the bundled files for reference), or use the `folder_based` layout described in [Supported Data Inputs](#supported-data-inputs).
 
 ### 2. Train
 
@@ -114,8 +134,13 @@ Prepare a config like [configs/train.yaml](configs/train.yaml):
 model_path: Qwen/Qwen3-ASR-1.7B
 output_dir: ./vocalparse-runs/experiment-1
 preprocessed_dir: "/path/to/preprocessed"
+
+# Datasets listed under val_datasets are moved entirely out of the
+# training set and used as validation. With the default three-corpus
+# setup, GTSinger + m4singer train the model and Opencpop validates it.
 val_datasets:
   - opencpop
+
 bpm_position: "last"
 asr_cot: true
 batch_size: 64

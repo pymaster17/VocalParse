@@ -31,6 +31,9 @@ uv.lock
 *.bin
 *.onnx
 
+# Bundled public-dataset annotations
+!data/*.json
+
 # Training outputs
 vocalparse-runs/
 results/

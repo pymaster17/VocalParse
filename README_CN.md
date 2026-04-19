@@ -72,7 +72,7 @@ uv pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu1
 uv pip install -e .
 ```
 
-可选安装 Flash Attention：
+Flash Attention 是可选依赖。默认安装使用 PyTorch SDPA，通用且无需额外配置。如果你的环境兼容 `flash-attn`，可以自行选装以获得加速：
 
 ```bash
 uv pip install -e ".[flash]"
@@ -80,24 +80,42 @@ uv pip install -e ".[flash]"
 
 说明：
 - `qwen-asr` 及其他所有依赖会自动安装。
-- 如果环境里无法安装 `flash-attn`，推理配置里改用 `sdpa` 即可。
+- 使用默认安装时，在推理配置里设置 `attn_implementation: sdpa` 即可（训练脚本不强制要求 flash-attn 后端）。
 - 预训练模型基于 `Qwen/Qwen3-ASR-1.7B` 微调，无需单独下载基座权重。
 
 ## 快速开始
 
 ### 1. 数据预处理
 
-参考 [configs/preprocess.yaml](configs/preprocess.yaml)：
+仓库在 [data/](data/) 下已内置三个公开歌唱数据集的标注 JSON，可直接使用：
+
+| 文件 | 样本数 | 数据集 |
+|---|---|---|
+| [data/Opencpop.json](data/Opencpop.json) | 3,756 | [Opencpop](https://wenet.org.cn/opencpop/) |
+| [data/gtsinger.json](data/gtsinger.json) | 7,139 | [GTSinger](https://github.com/GTSinger/GTSinger) |
+| [data/m4singer.json](data/m4singer.json) | 20,896 | [M4Singer](https://github.com/M4Singer/M4Singer) |
+
+音频请从各数据集官方渠道自行下载，`audio_root` 指向本地解压目录即可。[configs/preprocess.yaml](configs/preprocess.yaml) 已给出默认配置：
 
 ```yaml
-model_path: Qwen/Qwen3-ASR-0.6B
+model_path: Qwen/Qwen3-ASR-1.7B
 output_dir: "/path/to/preprocessed"
 
 datasets:
   - name: opencpop
     type: json_file
-    json_path: /path/to/Opencpop.json
+    json_path: data/Opencpop.json
     audio_root: /path/to/Opencpop
+
+  - name: gtsinger
+    type: json_file
+    json_path: data/gtsinger.json
+    audio_root: /path/to/GTSinger
+
+  - name: m4singer
+    type: json_file
+    json_path: data/m4singer.json
+    audio_root: /path/to/m4singer
 ```
 
 运行：
@@ -105,6 +123,8 @@ datasets:
 ```bash
 python scripts/preprocess.py --config configs/preprocess.yaml --num_workers 16
 ```
+
+使用自定义数据集时，请产出包含 `word`、`pitch`、`note`、`pitch2word`、`pitch_dur`、`word_dur`、`wav_fn`、`bpm` 字段的 JSON 列表（可参考内置三个文件的字段结构），或使用 [支持的数据输入](#支持的数据输入) 中描述的 `folder_based` 目录式结构。
 
 ### 2. 训练
 
@@ -114,8 +134,12 @@ python scripts/preprocess.py --config configs/preprocess.yaml --num_workers 16
 model_path: Qwen/Qwen3-ASR-1.7B
 output_dir: ./vocalparse-runs/experiment-1
 preprocessed_dir: "/path/to/preprocessed"
+
+# val_datasets 中列出的数据集会整体从训练集中剔除并作为验证集。
+# 默认三数据集配置下：GTSinger + m4singer 用于训练，Opencpop 用于验证。
 val_datasets:
   - opencpop
+
 bpm_position: "last"
 asr_cot: true
 batch_size: 64
