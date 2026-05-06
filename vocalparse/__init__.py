@@ -22,4 +22,7 @@ from vocalparse.model import (
     _get_encoder_output_length,
     load_audio,
     register_vocalparse_tokens,
+    load_model,
 )
+from vocalparse.demo import transcribe_one
+from vocalparse.api import VocalParseTranscriber

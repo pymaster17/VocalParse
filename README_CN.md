@@ -8,15 +8,59 @@
 
 - **统一转录**：单一解码器流同时建模歌词和旋律
 - **CoT 提示**：通过 `asr_cot` 支持“先歌词、后乐谱”的训练目标
-- **两种推理条件**：
-  - `audio-only`：仅从音频预测歌词和乐谱
-  - `audio-lyric`：给定歌词，仅预测乐谱
-- **三种输出模式**：
-  - `test_weak`：仅歌词 CER
-  - `test_full`：完整 AST 指标
-  - `annotation`：导出 Opencpop 风格标注 JSON
+- **两种推理入口**：
+  - `transcribe_one(audio, checkpoint)`：单样本快速推理，最少代码即可上手
+  - `VocalParseTranscriber`：生产级批量推理，原生支持多卡 torchrun
 - **验证可视化**：TensorBoard 内置 GT vs Pred 乐谱对比图
 - **动态批处理**：按 mel 帧预算进行训练和推理 batch 打包
+
+## 你想做什么？
+
+VocalParse 的代码库分为三条独立的工作路径，按需选用：
+
+### 🎵 快速试用：单样本推理
+
+适合：第一次接触 VocalParse、想快速验证模型在某个 wav 文件上的效果。
+
+```python
+from vocalparse import transcribe_one
+
+text = transcribe_one(
+    audio="path/to/song.wav",
+    checkpoint="./vocalparse-weights",
+)
+print(text)
+# 感 <P_68> <NOTE_4> 受 <P_60> <NOTE_8> ... <BPM_89>
+```
+
+也可以直接用命令行：
+
+```bash
+python -m vocalparse.demo --audio path/to/song.wav --checkpoint ./vocalparse-weights
+```
+
+详见 [vocalparse/demo.py](vocalparse/demo.py)。该模块刻意保持简洁——加载、预处理、生成、解码全在一个文件里，方便阅读和修改。
+
+### 🏭 生产批量：作为外部库被调用
+
+适合：把 VocalParse 嵌入 SVS / TTS 等下游 pipeline 做大批量音频识别 / 验证。
+内部实现包含多卡 torchrun、按 mel 帧预算自动 batch 打包、CPU prep ‖ GPU generate 流水线、跨卡 work-steal 调度等优化，对调用者完全透明。
+
+```python
+from vocalparse import VocalParseTranscriber
+
+trx = VocalParseTranscriber(checkpoint="./vocalparse-weights")
+results = trx.transcribe([wav_a, wav_b, ...])  # list[np.float32 array] → list[str]
+```
+
+多卡：用 `torchrun --nproc_per_node=4 your_script.py` 启动调用方脚本即可，`VocalParseTranscriber` 会自动从环境读取 `RANK / WORLD_SIZE` 并把 batch 分片到各卡，最终结果聚合到 rank 0。
+
+详见 [vocalparse/api.py](vocalparse/api.py) 与基准脚本 [scripts/benchmark_api.py](scripts/benchmark_api.py)。
+
+### 🎓 训练 / 微调
+
+适合：在自己的歌唱数据上训练或微调 VocalParse。流程：preprocess → train。
+跳到下面的 [快速开始 § 数据预处理](#1-数据预处理) 章节即可。
 
 ## 架构
 
@@ -163,23 +207,12 @@ torchrun --nproc_per_node=2 -m vocalparse.train --config configs/train.yaml
 
 ### 3. 推理
 
-参考 [configs/inference.yaml](configs/inference.yaml)：
+参见上方 [你想做什么？](#你想做什么) 章节中的两条推理路径：
 
-```yaml
-checkpoint: /path/to/checkpoint-or-output-dir
-preprocessed_dir: "/path/to/preprocessed"
-val_datasets:
-  - opencpop
-mode: "test_full"
-inference_mode: "audio-only"
-bpm_position: "last"
-```
+- **单样本快速推理**：[vocalparse/demo.py](vocalparse/demo.py) 或 `from vocalparse import transcribe_one`
+- **生产批量推理**：[vocalparse/api.py](vocalparse/api.py) 或 `from vocalparse import VocalParseTranscriber`
 
-运行：
-
-```bash
-python -m vocalparse.inference --config configs/inference.yaml
-```
+需要离线评测 / 标注？基于 `VocalParseTranscriber` 自己写脚本，搭配 [vocalparse/evaluation.py](vocalparse/evaluation.py) 中的 `parse_transcription_text` 等工具即可。可参考 [scripts/benchmark_api.py](scripts/benchmark_api.py) 作为模板。
 
 ## 支持的数据输入
 
@@ -215,45 +248,12 @@ val_datasets:
 
 ### 推理输入
 
-推理支持两种来源：
+推理 API（`transcribe_one` / `VocalParseTranscriber`）直接接受运行时数据，无需配置文件：
 
-1. `preprocessed_dir`
-   使用完整 GT AST，`mode: test_full` 必须使用这种模式。
-2. `audio_json`
-   读取原始音频列表，支持：
+- `transcribe_one`：wav 文件路径或 1D `np.float32` 数组
+- `VocalParseTranscriber.transcribe`：`list[np.float32 array]`（mono，16 kHz）
 
-```json
-["/abs/path/a.wav", "/abs/path/b.flac"]
-```
-
-或者：
-
-```json
-[
-  {"audio_path": "a.wav", "text": "歌词一"},
-  {"audio_path": "b.wav", "lyrics": "歌词二"}
-]
-```
-
-如果路径是相对路径，并且提供了 `audio_root`，则会自动拼接。
-
-## 推理条件与输出模式
-
-### 条件模式
-
-- `audio-only`
-  模型从音频直接预测歌词和乐谱。
-- `audio-lyric`
-  模型在 prompt 中接收 GT 歌词，只预测乐谱。主要用于 CoT 训练的模型。
-
-### 输出模式
-
-- `test_weak`
-  只计算 CER。适用于原始音频 JSON 和预处理数据。
-- `test_full`
-  计算完整 AST 指标，包括 CER、Pitch MAE、Note MAE、Duration MAE 和 BPM MAE。必须使用 `preprocessed_dir`（不支持 `audio_json`）。
-- `annotation`
-  导出 Opencpop 风格的逐样本标注 JSON。两种输入方式都支持。
+调用方负责音频加载（推荐 `librosa.load(path, sr=16000, mono=True)`）。
 
 ## Token 格式
 
@@ -337,23 +337,26 @@ VocalParse 在 `output_dir` 下写入 TensorBoard 日志。验证回调每隔 `e
 
 ```text
 vocalparse/
+  # 三个面向用户的入口
+  demo.py           # 单样本快速推理（transcribe_one）
+  api.py            # 批量生产推理（VocalParseTranscriber）
   train.py          # 训练入口
-  inference.py      # 推理入口
-  data.py           # 数据加载与 collator
-  evaluation.py     # AST 指标
-  validation.py     # 验证回调与可视化
-  output.py         # 推理结果格式化
-  tokens.py         # AST token 定义
+
+  # 共享核心
+  model.py          # 模型加载、patch、音频工具
   prompts.py        # Prompt 构建
-  model.py          # 模型 patch 与音频工具
+  tokens.py         # AST token 定义
+  evaluation.py     # AST 指标与解析工具
+  data.py           # 数据加载与 collator
+  validation.py     # 训练时验证回调与可视化
   checkpoint.py     # checkpoint 工具
-  distributed.py    # DDP 与批处理推理辅助函数
+  distributed.py    # DDP / batch 打包 / per-sample 编码（仅供 api.py）
 scripts/
-  preprocess.py     # Mel -> Arrow 预处理
+  preprocess.py       # Mel -> Arrow 预处理
+  benchmark_api.py    # VocalParseTranscriber 端到端基准
 configs/
   preprocess.yaml   # 预处理配置示例
   train.yaml        # 训练配置示例
-  inference.yaml    # 推理配置示例
 docs/
   note_tokens.md    # token 参考
 ```

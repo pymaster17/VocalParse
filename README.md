@@ -8,15 +8,57 @@ The model transcribes singing audio into a structured autoregressive sequence co
 
 - Unified singing transcription in one decoder stream
 - CoT-style prompting with `asr_cot`
-- Two inference conditions:
-  - `audio-only`: predict lyrics + score
-  - `audio-lyric`: predict score from audio with ground-truth lyrics provided
-- Three inference outputs:
-  - `test_weak`: lyric CER only
-  - `test_full`: lyric + pitch + note + BPM metrics
-  - `annotation`: export Opencpop-style annotation JSON
+- Two inference entry points:
+  - `transcribe_one(audio, checkpoint)`: minimal single-sample demo
+  - `VocalParseTranscriber`: production batch API with built-in multi-GPU torchrun support
 - Built-in validation callback with TensorBoard score comparison figures
 - Dynamic batching by mel-frame budget for training and inference
+
+## What do you want to do?
+
+VocalParse exposes three independent workflows; pick whichever matches your goal.
+
+### 🎵 Quick try-out: single-sample inference
+
+For first-time users who just want to see what the model produces on a wav file.
+
+```python
+from vocalparse import transcribe_one
+
+text = transcribe_one(
+    audio="path/to/song.wav",
+    checkpoint="./vocalparse-weights",
+)
+print(text)
+# 感 <P_68> <NOTE_4> 受 <P_60> <NOTE_8> ... <BPM_89>
+```
+
+Or via the command line:
+
+```bash
+python -m vocalparse.demo --audio path/to/song.wav --checkpoint ./vocalparse-weights
+```
+
+See [vocalparse/demo.py](vocalparse/demo.py). The module is intentionally compact — loading, preprocessing, generation, and decoding all live in one readable file.
+
+### 🏭 Production batch: as a library inside another pipeline
+
+For embedding VocalParse in SVS / TTS pipelines or running large-scale audio annotation. Internally uses multi-GPU torchrun, mel-budget batch packing, CPU prep ‖ GPU generate prefetch, and cross-rank work-steal scheduling — all hidden from the caller.
+
+```python
+from vocalparse import VocalParseTranscriber
+
+trx = VocalParseTranscriber(checkpoint="./vocalparse-weights")
+results = trx.transcribe([wav_a, wav_b, ...])  # list[np.float32 array] -> list[str]
+```
+
+Multi-GPU: launch your script with `torchrun --nproc_per_node=4 your_script.py` — `VocalParseTranscriber` reads `RANK` / `WORLD_SIZE` from env and gathers results to rank 0 automatically.
+
+See [vocalparse/api.py](vocalparse/api.py) and the benchmark in [scripts/benchmark_api.py](scripts/benchmark_api.py).
+
+### 🎓 Training / fine-tuning
+
+For training on your own singing data. Pipeline: preprocess → train. Jump to [Quick Start § Preprocess Data](#1-preprocess-data) below.
 
 ## Architecture
 
@@ -50,11 +92,7 @@ Or with the CLI:
 huggingface-cli download pymaster/VocalParse --local-dir ./vocalparse-weights
 ```
 
-Point the inference config to the downloaded directory:
-
-```yaml
-checkpoint: ./vocalparse-weights
-```
+Pass the downloaded path as `checkpoint` to either `transcribe_one(...)` or `VocalParseTranscriber(checkpoint=...)`.
 
 ## Installation
 
@@ -80,7 +118,7 @@ uv pip install -e ".[flash]"
 
 Notes:
 - `qwen-asr` and all other dependencies are installed automatically.
-- With the default install, set `attn_implementation: sdpa` in the inference config (the training script does not require a flash-attn backend).
+- With the default install, pass `attn_implementation="sdpa"` to `transcribe_one` / `VocalParseTranscriber` (the training script does not require a flash-attn backend).
 - The pretrained checkpoint above is based on `Qwen/Qwen3-ASR-1.7B`.
 
 ## Quick Start
@@ -164,23 +202,12 @@ Training automatically resumes from the latest `checkpoint-*` under `output_dir`
 
 ### 3. Inference
 
-Prepare a config like [configs/inference.yaml](configs/inference.yaml):
+See the two inference paths in the [What do you want to do?](#what-do-you-want-to-do) section above:
 
-```yaml
-checkpoint: /path/to/checkpoint-or-output-dir
-preprocessed_dir: "/path/to/preprocessed"
-val_datasets:
-  - opencpop
-mode: "test_full"
-inference_mode: "audio-only"
-bpm_position: "last"
-```
+- **Single-sample quick inference**: [vocalparse/demo.py](vocalparse/demo.py) or `from vocalparse import transcribe_one`
+- **Production batch inference**: [vocalparse/api.py](vocalparse/api.py) or `from vocalparse import VocalParseTranscriber`
 
-Run:
-
-```bash
-python -m vocalparse.inference --config configs/inference.yaml
-```
+For offline evaluation / annotation pipelines, build your own script on top of `VocalParseTranscriber` and the parsing utilities in [vocalparse/evaluation.py](vocalparse/evaluation.py) (`parse_transcription_text`, etc.). Use [scripts/benchmark_api.py](scripts/benchmark_api.py) as a starting template.
 
 ## Supported Data Inputs
 
@@ -216,45 +243,12 @@ val_datasets:
 
 ### Inference Inputs
 
-Inference supports two sources:
+The inference APIs (`transcribe_one` / `VocalParseTranscriber`) take runtime data directly — no config file required:
 
-1. `preprocessed_dir`
-   Uses full ground-truth AST targets. Required for `mode: test_full`.
-2. `audio_json`
-   Loads raw audio file lists. Supports:
+- `transcribe_one`: a wav file path or a 1D `np.float32` array
+- `VocalParseTranscriber.transcribe`: `list[np.float32 array]` (mono, 16 kHz)
 
-```json
-["/abs/path/a.wav", "/abs/path/b.flac"]
-```
-
-or:
-
-```json
-[
-  {"audio_path": "a.wav", "text": "歌词一"},
-  {"audio_path": "b.wav", "lyrics": "歌词二"}
-]
-```
-
-When paths are relative, `audio_root` is prepended if provided.
-
-## Inference Modes And Outputs
-
-### Condition Modes
-
-- `audio-only`
-  Model predicts lyrics and score from audio alone.
-- `audio-lyric`
-  Model receives ground-truth lyrics in the prompt and predicts only the score. This is mainly for CoT-trained checkpoints.
-
-### Output Modes
-
-- `test_weak`
-  CER-only evaluation. Works with raw audio JSON or preprocessed input.
-- `test_full`
-  Full AST evaluation with CER, pitch MAE, note MAE, duration MAE, and BPM MAE. Requires `preprocessed_dir` (not supported with `audio_json`).
-- `annotation`
-  Exports Opencpop-style per-sample annotation JSON. Works with either input type.
+Audio loading is the caller's responsibility (we recommend `librosa.load(path, sr=16000, mono=True)`).
 
 ## Token Format
 
@@ -338,23 +332,26 @@ Metrics are computed with two-stage Needleman-Wunsch alignment:
 
 ```text
 vocalparse/
+  # Three user-facing entry points
+  demo.py           # Single-sample quick inference (transcribe_one)
+  api.py            # Production batch inference (VocalParseTranscriber)
   train.py          # Training entry point
-  inference.py      # Inference entry point
-  data.py           # Dataset loading and collators
-  evaluation.py     # AST metrics
-  validation.py     # Validation callback and visualization
-  output.py         # Inference output formatting
-  tokens.py         # AST token definitions
+
+  # Shared core
+  model.py          # Model loading, patching, audio helpers
   prompts.py        # Prompt construction
-  model.py          # Model patching and audio helpers
+  tokens.py         # AST token definitions
+  evaluation.py     # AST metrics and parsing utilities
+  data.py           # Dataset loading and collators
+  validation.py    # Train-time validation callback and visualization
   checkpoint.py     # Checkpoint helpers
-  distributed.py    # Batched inference and DDP helpers
+  distributed.py    # DDP / batch packing / per-sample encoding (used by api.py)
 scripts/
-  preprocess.py     # Mel -> Arrow preprocessing
+  preprocess.py       # Mel -> Arrow preprocessing
+  benchmark_api.py    # End-to-end benchmark for VocalParseTranscriber
 configs/
   preprocess.yaml   # Example preprocessing config
   train.yaml        # Example training config
-  inference.yaml    # Example inference config
 docs/
   note_tokens.md    # Token reference
 ```

@@ -20,6 +20,8 @@ import torch
 
 def init_distributed():
     """Init torch.distributed if launched via torchrun. Returns (rank, world_size)."""
+    if torch.distributed.is_available() and torch.distributed.is_initialized():
+        return torch.distributed.get_rank(), torch.distributed.get_world_size()
     if "RANK" in os.environ:
         local_rank = int(os.environ["LOCAL_RANK"])
         # Bind CUDA context before NCCL init/barrier to avoid device guessing hangs.
