@@ -67,7 +67,6 @@ class VocalParseTranscriber:
         attn_implementation: str = "flash_attention_2",
     ):
         from vocalparse.model import load_model
-        from vocalparse.prompts import build_prefix_text
 
         was_distributed = (
             torch.distributed.is_available()
@@ -83,7 +82,6 @@ class VocalParseTranscriber:
         cfg = {"checkpoint": checkpoint, "attn_implementation": attn_implementation}
         self.model, self.processor, self.device = load_model(cfg)
         self.tokenizer = self.processor.tokenizer
-        self._prefix_text = build_prefix_text(self.processor)
         self._pad_token_id = self.tokenizer.pad_token_id or 151643
 
     def __enter__(self):
@@ -104,6 +102,8 @@ class VocalParseTranscriber:
         max_new_tokens: int = 512,
         batch_size: int = 32,
         batch_mel_tokens: int = 24000,
+        lyrics=None,
+        inference_mode: str = "audio-only",
     ):
         """Transcribe a batch of mono float32 audio arrays.
 
@@ -114,14 +114,47 @@ class VocalParseTranscriber:
             max_new_tokens: decoder generation cap.
             batch_size: max samples per packed batch.
             batch_mel_tokens: max total mel frames per packed batch.
+            lyrics: optional list of per-sample GT lyric strings. Required
+                (and every entry must be non-empty) when
+                ``inference_mode="audio-lyric"``; ignored otherwise.
+            inference_mode: ``"audio-only"`` (default; the model decodes
+                lyrics + interleaved AST from audio alone) or
+                ``"audio-lyric"`` (caller supplies GT lyrics as the prompt
+                prefix; the model only predicts the interleaved AST).
 
         Returns:
             On rank 0: ``list[str]`` of decoded text, in the same order as
             ``audios``. On other ranks: ``None``.
         """
+        from vocalparse.prompts import build_prefix_text
+
+        if inference_mode not in ("audio-only", "audio-lyric"):
+            raise ValueError(
+                f"inference_mode must be 'audio-only' or 'audio-lyric', "
+                f"got {inference_mode!r}"
+            )
+        if inference_mode == "audio-lyric":
+            if lyrics is None or len(lyrics) != len(audios) or any(
+                not l for l in lyrics
+            ):
+                raise ValueError(
+                    "inference_mode='audio-lyric' requires `lyrics` to be a "
+                    "list of non-empty strings, one per audio"
+                )
+            prefixes = [
+                build_prefix_text(self.processor, lyrics_text=l) for l in lyrics
+            ]
+        else:
+            shared = build_prefix_text(self.processor)
+            prefixes = [shared] * len(audios)
+
         indexed_samples = [
-            (i, {"audio": wav, "mel_frames": (len(wav) * _MEL_FRAMES_PER_SEC) // sr})
-            for i, wav in enumerate(audios)
+            (i, {
+                "audio": wav,
+                "prefix": pfx,
+                "mel_frames": (len(wav) * _MEL_FRAMES_PER_SEC) // sr,
+            })
+            for i, (wav, pfx) in enumerate(zip(audios, prefixes))
         ]
         batches = pack_batches(indexed_samples, batch_mel_tokens, batch_size)
 
@@ -145,8 +178,9 @@ class VocalParseTranscriber:
             if first_idx < len(batches):
                 prep_idx = first_idx
                 first_audios = [s["audio"] for _, s in batches[first_idx]]
+                first_prefixes = [s["prefix"] for _, s in batches[first_idx]]
                 prep_future = pool.submit(
-                    self._prepare_audio_batch, first_audios, sr,
+                    self._prepare_audio_batch, first_audios, first_prefixes, sr,
                 )
             else:
                 prep_future = None
@@ -162,8 +196,9 @@ class VocalParseTranscriber:
                 if next_idx < len(batches):
                     prep_idx = next_idx
                     next_audios = [s["audio"] for _, s in batches[next_idx]]
+                    next_prefixes = [s["prefix"] for _, s in batches[next_idx]]
                     prep_future = pool.submit(
-                        self._prepare_audio_batch, next_audios, sr,
+                        self._prepare_audio_batch, next_audios, next_prefixes, sr,
                     )
                 else:
                     prep_future = None
@@ -195,18 +230,24 @@ class VocalParseTranscriber:
 
     # ── internals ──────────────────────────────────────────────────────
 
-    def _prepare_audio_batch(self, audios, sr):
+    def _prepare_audio_batch(self, audios, prefixes, sr):
         """CPU prep: per-sample mel + tokenization (audio_token already expanded
         by the processor), then left-pad. Per-sample (not batched) so the audio
-        encoder sees no cross-sample mel padding — preserves precision."""
+        encoder sees no cross-sample mel padding — preserves precision.
+
+        ``prefixes`` is a parallel list of pre-built chat-template prefix
+        strings (one per audio); audio-only callers pass the same string for
+        every sample, audio-lyric callers pass per-sample lyric-conditioned
+        prefixes.
+        """
         batch_mels = []
         batch_mel_lens = []
         batch_ids = []
         batch_prefix_lens = []
 
-        for wav in audios:
+        for wav, pfx in zip(audios, prefixes):
             single = self.processor(
-                text=[self._prefix_text],
+                text=[pfx],
                 audio=[wav],
                 sampling_rate=sr,
                 return_tensors="pt",

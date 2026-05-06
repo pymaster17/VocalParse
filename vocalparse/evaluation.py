@@ -332,10 +332,13 @@ def compute_metrics(
     if gt_parsed is None:
         return None
 
+    # Aggregate GT before any branch — n_gt_words must be defined on every
+    # return path, including the unparseable-prediction early-return below
+    # and the normal happy path further down.
+    gt_words = aggregate_to_words(gt_parsed)
+
     # Handle unparseable predictions (early training garbage)
     if pred_parsed is None:
-        n_gt = len(gt_parsed["words"])
-        gt_words = aggregate_to_words(gt_parsed)
         return {
             "cer": 1.0,
             "pitch_mae": float("nan"),
@@ -347,7 +350,6 @@ def compute_metrics(
             "n_aligned_pairs": 0,
         }
 
-    gt_words = aggregate_to_words(gt_parsed)
     pred_words = aggregate_to_words(pred_parsed)
     gt_lyric = _remove_silence_words(gt_words)
     pred_lyric = _remove_silence_words(pred_words)
@@ -442,7 +444,7 @@ def compute_metrics(
         "note_mae": _safe_mean(note_errors),
         "dur_mae": _safe_mean(abs_note_dur_errors),
         "bpm_mae": float(abs(gt_parsed["bpm"] - pred_parsed["bpm"])),
-        "n_gt_words": n_gt,
+        "n_gt_words": len(gt_words),
         "n_pred_words": len(pred_words),
         "n_aligned_pairs": len(pitch_errors),
     }

@@ -113,7 +113,16 @@ def build_interleaved_text(
 
 
 def build_prefix_text(processor, lyrics_text: str = None) -> str:
-    """Build chat template prefix text."""
+    """Build chat template prefix text.
+
+    For ``lyrics_text`` (audio-lyric / ASR-CoT inference), the assistant
+    turn is pre-filled with the training-time CoT prefix
+    ``language Chinese<asr_text>{lyrics}<|file_sep|>`` so the model only
+    has to generate the AST tail. Injecting lyrics inside the user
+    message would be off-distribution — training only ever puts lyrics
+    in the assistant slot (see data.py: target = "language Chinese
+    <asr_text>{cot_lyrics}<|file_sep|>{ast_text}").
+    """
     dummy_msgs = [
         {"role": "system", "content": ""},
         {"role": "user", "content": [{"type": "audio", "audio": None}]},
@@ -123,12 +132,9 @@ def build_prefix_text(processor, lyrics_text: str = None) -> str:
     )[0]
 
     if lyrics_text:
-        user_end_marker = "<|audio_end|><|im_end|>"
-        if user_end_marker in base_prefix:
-            base_prefix = base_prefix.replace(
-                user_end_marker,
-                f"<|audio_end|>{lyrics_text}<|im_end|>",
-                1,
-            )
+        base_prefix = (
+            f"{base_prefix}language Chinese<asr_text>"
+            f"{lyrics_text}<|file_sep|>"
+        )
 
     return base_prefix
