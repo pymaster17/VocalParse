@@ -1,8 +1,24 @@
 # VocalParse
 
-**VocalParse** is a minimal open-source extraction of the VocalParse subsystem from [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR). It keeps the core training, validation, inference, preprocessing, and evaluation pipeline for unified singing voice transcription, while removing unrelated experimental branches and auxiliary baselines.
+<p align="center">
+  <a href="http://arxiv.org/abs/2605.04613"><img src="https://img.shields.io/badge/arXiv-2605.04613-b31b1b.svg" alt="arXiv"></a>
+  <a href="https://huggingface.co/pymaster/VocalParse"><img src="https://img.shields.io/badge/🤗%20HuggingFace-VocalParse--1.7B-yellow" alt="HuggingFace"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
+  <a href="README_CN.md"><img src="https://img.shields.io/badge/lang-中文-green.svg" alt="Chinese"></a>
+</p>
 
-The model transcribes singing audio into a structured autoregressive sequence containing lyrics, pitch, note values, and global tempo.
+> **VocalParse: Towards Unified and Scalable Singing Voice Transcription with Large Audio Language Models**
+> [\[Paper\]](http://arxiv.org/abs/2605.04613) · [\[Model\]](https://huggingface.co/pymaster/VocalParse)
+
+This repository is the official open-source implementation of the **VocalParse** paper. VocalParse transcribes singing audio into a **unified autoregressive structured sequence**, jointly modeling lyrics, pitch, note values, and global tempo (BPM) in a single decoder stream — collapsing what is traditionally a pipeline of separate ASR, pitch-estimation, and note-segmentation modules into a single audio-LLM.
+
+The implementation is built on [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR), extending its vocabulary with roughly 400 AST tokens (pitch, note value, tempo). Training, inference, and evaluation pipelines are all included.
+
+## News
+
+- **2026-05** Paper released on arXiv: [arXiv:2605.04613](http://arxiv.org/abs/2605.04613)
+- **2026-05** Fine-tuned checkpoint VocalParse-1.7B released on [HuggingFace](https://huggingface.co/pymaster/VocalParse)
+- **2026-05** Code released
 
 ## Features
 
@@ -358,18 +374,21 @@ docs/
 
 ## Citation
 
-If you use VocalParse in your research, please cite:
+If VocalParse is useful for your research, please cite our paper:
 
 ```bibtex
 @article{vocalparse2026,
-  title={VocalParse: Towards Unified and Scalable Singing Voice Transcription with Large Audio Language Models},
-  year={2026}
+  title   = {VocalParse: Towards Unified and Scalable Singing Voice Transcription with Large Audio Language Models},
+  author  = {VocalParse Team},
+  journal = {arXiv preprint arXiv:2605.04613},
+  year    = {2026},
+  url     = {http://arxiv.org/abs/2605.04613}
 }
 ```
 
 ## Acknowledgments
 
-VocalParse is built on [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR) by the Alibaba Qwen team.
+VocalParse is built on [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR) by the Alibaba Qwen team. We also thank the authors of [Opencpop](https://wenet.org.cn/opencpop/), [GTSinger](https://github.com/GTSinger/GTSinger), and [M4Singer](https://github.com/M4Singer/M4Singer) for releasing the public singing corpora used in our training and evaluation.
 
 ## License
 

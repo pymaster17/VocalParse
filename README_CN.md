@@ -1,8 +1,24 @@
 # VocalParse
 
-**VocalParse** 是从 [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR) 中抽离出的最小开源子仓库，保留了 VocalParse 相关的核心训练、验证、推理、预处理和评估链路，同时去掉了无关实验分支和外围基线代码。
+<p align="center">
+  <a href="http://arxiv.org/abs/2605.04613"><img src="https://img.shields.io/badge/arXiv-2605.04613-b31b1b.svg" alt="arXiv"></a>
+  <a href="https://huggingface.co/pymaster/VocalParse"><img src="https://img.shields.io/badge/🤗%20HuggingFace-VocalParse--1.7B-yellow" alt="HuggingFace"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
+  <a href="README.md"><img src="https://img.shields.io/badge/lang-English-green.svg" alt="English"></a>
+</p>
 
-它将歌唱音频转录为统一的自回归结构化序列，包含歌词、音高、音符时值和全局 BPM。
+> **VocalParse: Towards Unified and Scalable Singing Voice Transcription with Large Audio Language Models**
+> [\[论文 / Paper\]](http://arxiv.org/abs/2605.04613) · [\[模型 / Model\]](https://huggingface.co/pymaster/VocalParse)
+
+本仓库是论文 **VocalParse** 的官方开源实现。我们提出了一种将歌唱音频转录为**统一自回归结构化序列**的方法，在单一解码器流中同时建模歌词、音高、音符时值和全局速度（BPM）——把传统上由 ASR + 音高估计 + 音符切分多个独立模块完成的歌唱转录任务，统一到一个 audio-LLM 框架内。
+
+代码基于 [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR) 实现，词表扩展约 400 个 AST token（音高、音符时值、速度），训练、推理、评估全链路开源。
+
+## News
+
+- **2026-05** 论文发布于 arXiv：[arXiv:2605.04613](http://arxiv.org/abs/2605.04613)
+- **2026-05** 微调 checkpoint VocalParse-1.7B 发布于 [HuggingFace](https://huggingface.co/pymaster/VocalParse)
+- **2026-05** 代码仓库开源
 
 ## 特性
 
@@ -363,18 +379,21 @@ docs/
 
 ## 引用
 
-如果你在研究中使用了 VocalParse，请引用：
+如果 VocalParse 对你的研究有帮助，请引用我们的论文：
 
 ```bibtex
 @article{vocalparse2026,
-  title={VocalParse: Towards Unified and Scalable Singing Voice Transcription with Large Audio Language Models},
-  year={2026}
+  title   = {VocalParse: Towards Unified and Scalable Singing Voice Transcription with Large Audio Language Models},
+  author  = {Yukun Chen and Tianrui Wang and Zhaoxi Mu and Xinyu Yang and EngSiong Chng},
+  journal = {arXiv preprint arXiv:2605.04613},
+  year    = {2026},
+  url     = {http://arxiv.org/abs/2605.04613}
 }
 ```
 
 ## 致谢
 
-VocalParse 基于阿里巴巴 Qwen 团队的 [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR) 构建。
+VocalParse 基于阿里巴巴 Qwen 团队的 [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR) 构建，并使用 [Opencpop](https://wenet.org.cn/opencpop/)、[GTSinger](https://github.com/GTSinger/GTSinger) 和 [M4Singer](https://github.com/M4Singer/M4Singer) 三个公开歌唱数据集进行训练与评估。在此一并感谢上述工作的作者。
 
 ## 许可证
 
