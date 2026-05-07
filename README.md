@@ -379,7 +379,7 @@ If VocalParse is useful for your research, please cite our paper:
 ```bibtex
 @article{vocalparse2026,
   title   = {VocalParse: Towards Unified and Scalable Singing Voice Transcription with Large Audio Language Models},
-  author  = {VocalParse Team},
+  author  = {Yukun Chen and Tianrui Wang and Zhaoxi Mu and Xinyu Yang and EngSiong Chng},
   journal = {arXiv preprint arXiv:2605.04613},
   year    = {2026},
   url     = {http://arxiv.org/abs/2605.04613}
