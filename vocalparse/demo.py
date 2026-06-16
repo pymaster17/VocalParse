@@ -64,6 +64,11 @@ def transcribe_one(
         truncation=False,
     )
     inputs = {k: v.to(device) for k, v in inputs.items()}
+    # Audio features come out of the processor as float32; cast them to the
+    # model's compute dtype (bf16/fp16) so the audio tower's Conv2d weights
+    # and inputs match.
+    if "input_features" in inputs and inputs["input_features"].is_floating_point():
+        inputs["input_features"] = inputs["input_features"].to(model.dtype)
     prefix_len = inputs["input_ids"].shape[1]
 
     with torch.no_grad():

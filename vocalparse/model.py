@@ -54,27 +54,18 @@ def load_audio(path: str, sr: int = 16000):
     return wav
 
 
-def _vocalparse_tokens(include_legacy: bool = False):
+def _vocalparse_tokens():
     pitch_tokens, note_tokens, bpm_tokens, _ = get_token_maps()
-    tokens = pitch_tokens + note_tokens + bpm_tokens
-    if include_legacy:
-        # Legacy compat: pre-e2b4c13 checkpoints carry 1000 <dur_*> and 2
-        # <SLUR>/<SVS_MASK> rows in their embedding. Downstream prompts/eval
-        # code does not use them, but inference must recreate the old vocab.
-        legacy_special_tokens = ["<SLUR>", "<SVS_MASK>"]
-        legacy_dur_tokens = [f"<dur_{i / 100:.2f}>" for i in range(1, 1001)]
-        tokens += legacy_special_tokens + legacy_dur_tokens
-    return tokens
+    return pitch_tokens + note_tokens + bpm_tokens
 
 
 def register_vocalparse_tokens(
     processor,
     model,
-    include_legacy: bool = False,
     target_vocab_size: int | None = None,
 ) -> int:
     """Add AST special tokens to the tokenizer and resize model embeddings."""
-    new_tokens = _vocalparse_tokens(include_legacy=include_legacy)
+    new_tokens = _vocalparse_tokens()
     num_added = processor.tokenizer.add_tokens(new_tokens)
     if target_vocab_size is not None and len(processor.tokenizer) != target_vocab_size:
         raise ValueError(
@@ -210,23 +201,19 @@ def load_model(cfg):
     model.generation_config = GenerationConfig.from_model_config(model.config)
 
     checkpoint_vocab_size = _infer_checkpoint_vocab_size(checkpoint)
-    include_legacy_tokens = False
     if checkpoint_vocab_size is not None:
         base_vocab_size = len(processor.tokenizer)
-        standard_vocab_size = base_vocab_size + len(_vocalparse_tokens(False))
-        legacy_vocab_size = base_vocab_size + len(_vocalparse_tokens(True))
-        include_legacy_tokens = checkpoint_vocab_size == legacy_vocab_size
-        if checkpoint_vocab_size not in (standard_vocab_size, legacy_vocab_size):
+        standard_vocab_size = base_vocab_size + len(_vocalparse_tokens())
+        if checkpoint_vocab_size != standard_vocab_size:
             raise ValueError(
                 "Unsupported VocalParse checkpoint vocab size: "
                 f"checkpoint={checkpoint_vocab_size}, base={base_vocab_size}, "
-                f"standard={standard_vocab_size}, legacy={legacy_vocab_size}"
+                f"standard={standard_vocab_size}"
             )
 
     register_vocalparse_tokens(
         processor,
         model,
-        include_legacy=include_legacy_tokens,
         target_vocab_size=checkpoint_vocab_size,
     )
 
